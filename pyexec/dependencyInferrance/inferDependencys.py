@@ -6,7 +6,6 @@ from pydefects.util.shell import run_command
 
 
 class InferDockerfile:
-
     class NoEnviromentFoundExcpetion(Exception):
         pass
 
@@ -28,7 +27,9 @@ class InferDockerfile:
         files: List[str] = InferDockerfile.__find_python_files(self.__projectPath)
         dockerfiles: List[str] = []
         for f in dockerfiles:
-            dockerfiles.append(InferDockerfile.__execute_v2(self.__projectPath, f, timeout))
+            dockerfiles.append(
+                InferDockerfile.__execute_v2(self.__projectPath, f, timeout)
+            )
         return InferDockerfile.__mergeDockerfiles(dockerfiles)
 
     @staticmethod
