@@ -45,7 +45,7 @@ class InferDockerfile:
 
     @staticmethod
     def __find_python_files(projectPath: str) -> List[str]:
-        command: str = "find " + projectPath + " -type f -name \'*.py\' -not -name \'test*\' -not -name \'__init__.py\'"
+        command: str = "find " + projectPath + " -type f -name '*.py' -not -name 'test*' -not -name '__init__.py'"
         out, _ = run_command(command)
         return out.splitlines()
 
@@ -53,18 +53,19 @@ class InferDockerfile:
     def __execute_v2(
         projectPath: str, filePath: str, timeout: Optional[int] = None
     ) -> str:
-        command: str = 'v2 run --projectdir "' + projectPath + '" --environment "PYTHONPATH=$(find' + projectPath + ' -not -path \'*/\\.*\' -not path \'*__pycache__*\' -type d -printf ":%p" | sed "s|' + projectPath + '|/mnt/projectdir/|g")" ' + filePath
+        command: str = 'v2 run --projectdir "' + projectPath + '" --environment "PYTHONPATH=$(find' + projectPath + " -not -path '*/\\.*' -not path '*__pycache__*' -type d -printf \":%p\" | sed \"s|" + projectPath + '|/mnt/projectdir/|g")" ' + filePath
 
         try:
             out, _ = run_command(command, timeout)
         except subprocess.TimeoutExpired:
-            raise InferDockerfile.TimeoutException("A timeout happend during execution of v2")
+            raise InferDockerfile.TimeoutException(
+                "A timeout happend during execution of v2"
+            )
 
         out = out.strip()
         if out == "":
             raise InferDockerfile.NoEnviromentFoundExcpetion(
-                "V2 is unable to infer a working environment for package "
-                + filePath
+                "V2 is unable to infer a working environment for package " + filePath
             )
         else:
             return out
