@@ -13,6 +13,7 @@ pytest-cov = "*"
 pre-commit = "*"
 
 [packages]
+setuptools = "*"
 
 [requires]
 python_version = "3.8"
