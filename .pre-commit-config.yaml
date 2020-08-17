@@ -36,6 +36,7 @@ repos:
         stages: [commit]
         language: system
         entry: pipenv run pytest -m "not slow"
+        pass_filenames: false
         types: [python]
 
       - id: pytest-cov
