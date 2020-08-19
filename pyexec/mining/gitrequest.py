@@ -1,9 +1,9 @@
-import logging
 import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from glob import glob
+from logging import Logger
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from git import Blob, Commit, Repo, TagObject, Tree
@@ -27,26 +27,28 @@ class RepositoryCommit:
 class GitRequest:
     """A wrapper for a Git repository to mine information from the repository."""
 
-    def __init__(self, repo_user: str, repo_name: str, logger: logging.Logger) -> None:
-        self._repo_user = repo_user
-        self._repo_name = repo_name
-        self._logger = logger
+    def __init__(
+        self, repo_user: str, repo_name: str, logger: Optional[Logger]
+    ) -> None:
+        self.__repo_user = repo_user
+        self.__repo_name = repo_name
+        self.__logger = logger
 
-        self._commits: Dict[str, Dict[str, Any]] = dict()
-        self._close_regex = re.compile(
+        self.__commits: Dict[str, Dict[str, Any]] = dict()
+        self.__close_regex = re.compile(
             r"(close([sd])?|fix(es|ed)?|resolve([sd])?)\s+#(\d+)", re.IGNORECASE
         )
-        self._bugfix_regex = re.compile(
+        self.__bugfix_regex = re.compile(
             r"(error|fix|issue|mistake|incorrect|fault|detect|flaw)", re.IGNORECASE
         )
 
-        self._num_lines = -1
-        self._num_files = -1
-        self._num_commits = -1
-        self._head_commit = None
-        self._test_frameworks: Optional[Set[str]] = None
-        self._test_run_results = None
-        self._type_annotations: Set[str] = set()
+        self.__num_lines = -1
+        self.__num_files = -1
+        self.__num_commits = -1
+        self.__head_commit = None
+        self.__test_frameworks: Optional[Set[str]] = None
+        self.__test_run_results = None
+        self.__type_annotations: Set[str] = set()
 
     def grab(self, tmp_dir: str, testing: bool = False) -> Dict[str, RepositoryCommit]:
         """
@@ -56,52 +58,51 @@ class GitRequest:
         :param testing: Indicates whether we are in testing mode or not.
         :return: A mapping of results.
         """
-        path = os.path.join(tmp_dir, self._repo_name)
+        path = os.path.join(tmp_dir, self.__repo_name)
         if testing:
-            url = "https://github.com/{}/{}".format(self._repo_user, self._repo_name)
+            url = "https://github.com/{}/{}".format(self.__repo_user, self.__repo_name)
         else:
-            url = "git@github.com:{}/{}".format(self._repo_user, self._repo_name)
+            url = "git@github.com:{}/{}".format(self.__repo_user, self.__repo_name)
         repo = Repo.clone_from(url, path)
         repo_mining = RepositoryMining(path)
 
-        self._num_commits, commits = self._find_flaw_referencing_commits(repo_mining)
-        issue_ids = self._extract_issue_ids(commits)
-        commits = self._add_issue_ids_to_commits(issue_ids, commits)
+        self.__num_commits, commits = self.__find_flaw_referencing_commits(repo_mining)
+        issue_ids = self.__extract_issue_ids(commits)
+        commits = self.__add_issue_ids_to_commits(issue_ids, commits)
 
-        cloc_stats = self._get_cloc_stats(path)
+        cloc_stats = self.__get_cloc_stats(path)
         if cloc_stats is not None and len(cloc_stats) == 2:
-            self._num_files, self._num_lines = cloc_stats
-        self._head_commit = repo.head.commit
-        self._test_frameworks = self._detect_test_frameworks(path)
-        self._logger.debug("Detected Test Frameworks: %s", self._test_frameworks)
+            self.__num_files, self.__num_lines = cloc_stats
+        self.__head_commit = repo.head.commit
+        self.__test_frameworks = self.__detect_test_frameworks(path)
         #        self._test_run_results = self._extract_test_run_results(path)
-        self._type_annotations = self._detect_type_annotations(path)
+        self.__type_annotations = self.__detect_type_annotations(path)
 
         return commits
 
     @property
     def num_lines(self) -> int:
-        return self._num_lines
+        return self.__num_lines
 
     @property
     def num_files(self) -> int:
-        return self._num_files
+        return self.__num_files
 
     @property
     def num_commits(self) -> int:
-        return self._num_commits
+        return self.__num_commits
 
     @property
     def head_commit(self) -> Union[Blob, TagObject, Tree, Commit]:
-        return self._head_commit
+        return self.__head_commit
 
     @property
     def test_frameworks(self) -> Optional[Set[str]]:
-        return self._test_frameworks
+        return self.__test_frameworks
 
     @property
     def type_annotations(self) -> Set[str]:
-        return self._type_annotations
+        return self.__type_annotations
 
     """
     @property
@@ -109,7 +110,7 @@ class GitRequest:
         return self._test_run_results
     """
 
-    def _find_flaw_referencing_commits(
+    def __find_flaw_referencing_commits(
         self, repo_mining: RepositoryMining
     ) -> Tuple[int, Dict[str, RepositoryCommit]]:
         def pretty_diffs(modifications: List[Modification]) -> List[Dict[str, str]]:
@@ -125,13 +126,13 @@ class GitRequest:
                 for m in modifications
             ]
 
-        self._logger.debug("Search for flaws in commit message")
+        self.__log_debug("Search for flaws in commit message")
         commit_counter: int = 0
         commits: Dict[str, RepositoryCommit] = dict()
 
         for commit in repo_mining.traverse_commits():
             commit_counter += 1
-            if self._close_regex.match(commit.msg) or self._bugfix_regex.match(
+            if self.__close_regex.match(commit.msg) or self.__bugfix_regex.match(
                 commit.msg
             ):
                 author = "{} <{}>".format(commit.author.name, commit.author.email)
@@ -151,14 +152,15 @@ class GitRequest:
 
         return commit_counter, commits
 
-    def _extract_issue_ids(
+    def __extract_issue_ids(
         self, commits: Dict[str, RepositoryCommit]
     ) -> Dict[str, Set[str]]:
-        self._logger.debug("Extract issue IDs")
+        self.__log_debug("Extract issue IDs")
+
         issue_ids: Dict[str, Set[str]] = {}
         for commit, values in commits.items():
             issue_ids[commit] = set()
-            for match in self._close_regex.finditer(values.msg):
+            for match in self.__close_regex.finditer(values.msg):
                 groups = match.groups()
                 issue_id = groups[-1]
                 if issue_id is not None:
@@ -168,7 +170,7 @@ class GitRequest:
         return issue_ids
 
     @staticmethod
-    def _add_issue_ids_to_commits(
+    def __add_issue_ids_to_commits(
         issue_ids: Dict[str, Set[str]], commits: Dict[str, RepositoryCommit]
     ) -> Dict[str, RepositoryCommit]:
         for commit, ids in issue_ids.items():
@@ -176,7 +178,7 @@ class GitRequest:
         return commits
 
     @staticmethod
-    def _get_cloc_stats(path: Union[bytes, str]) -> Optional[Tuple[int, int]]:
+    def __get_cloc_stats(path: Union[bytes, str]) -> Optional[Tuple[int, int]]:
         cloc = local["cloc"]
         if cloc is None:
             return None
@@ -193,7 +195,7 @@ class GitRequest:
         return None
 
     @staticmethod
-    def _detect_type_annotations(path: str) -> Set[str]:
+    def __detect_type_annotations(path: str) -> Set[str]:
         grep = local["grep"]
         type_annotations = set()
 
@@ -213,8 +215,8 @@ class GitRequest:
         return type_annotations
 
     # flake8: noqa: C901
-    def _detect_test_frameworks(self, path: Union[bytes, str]) -> Optional[Set[str]]:
-        self._logger.debug("Searching for test framework")
+    def __detect_test_frameworks(self, path: Union[bytes, str]) -> Optional[Set[str]]:
+        self.__log_debug("Searching for test framework")
         grep = local["grep"]
         frameworks = set()
 
@@ -348,6 +350,10 @@ class GitRequest:
             frameworks.add("aspectlib")
 
         return frameworks if len(frameworks) > 0 else None
+
+    def __log_debug(self, msg: str):
+        if self.__logger is not None:
+            self.__logger.debug(msg)
 
     """
     def _extract_test_run_results(self, path: Union[bytes, str]) -> Optional[RunResult]:
