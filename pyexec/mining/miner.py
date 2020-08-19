@@ -8,21 +8,22 @@ from typing import Dict, List, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
 
-from pyexec.depenencyInferrance.inferDependencys import InferDockerfile
+from pyexec.dependencyInference.inferDependencys import InferDockerfile
 from pyexec.mining.gitrequest import GitRequest
-from pyexec.mining.Miner import PackageInfo
 from pyexec.mining.pypirequest import PyPIRequest
+from pyexec.util.logging import get_logger
+
+
+@dataclass
+class PackageInfo:
+    name: str
+    repo_user: Optional[str] = None
+    repo_name: Optional[str] = None
+    dockerfile: Optional[str] = None
 
 
 class Miner:
-    @dataclass
-    class PackageInfo:
-        name: str
-        repo_user: Optional[str]
-        repo_name: Optional[str]
-        dockerfile: Optional[str]
-
-    def __init__(self, packages: List[str], logger: Optional[Logger]):
+    def __init__(self, packages: List[str], logger: Optional[Logger] = None):
         self.__packages = packages
         self.__logger = logger
         self.__github_regex = re.compile(
@@ -41,23 +42,30 @@ class Miner:
                 self.__log_warning("No PyPI information found for package {}".format(p))
                 continue
 
-            (user, name) = self.__extract_repository_path(pypi_info)  # type: ignore
-            if (user, name) is None:
+            ghpath = self.__extract_repository_path(pypi_info)
+            if ghpath is None:
                 self.__log_info("No Github link found for package {}".format(p))
                 continue
+            user, name = ghpath
             info.repo_user = user
             info.repo_name = name
             gitrequest = GitRequest(user, name, self.__logger)
 
             with TemporaryDirectory() as tmp:
                 gitrequest.grab(tmp)
-                inferdockerfile = InferDockerfile(path.join(tmp, p))
+                inferdockerfile = InferDockerfile(
+                    path.join(tmp, p.capitalize()), self.__logger
+                )
 
                 try:
                     info.dockerfile = inferdockerfile.inferDockerfile()
-                except InferDockerfile.NoEnvironmenFoundExpection:
+                except InferDockerfile.NoEnvironmentFoundException:
                     self.__log_info("No environment found for package {}".format(p))
                     continue
+                except InferDockerfile.TimeoutException:
+                    self.__log_info("v2 timed out on package {}".format(p))
+                    continue
+
         return result
 
     def __log_debug(self, msg: str) -> None:
@@ -144,3 +152,45 @@ class Miner:
 
         else:
             return None
+
+
+class PyexecMiner:
+    def __init__(
+        self, packageListFile: str, outputfile: str, logfile: Optional[str] = None
+    ) -> None:
+        if not path.exists(packageListFile) or not path.isfile(packageListFile):
+            raise FileNotFoundError(
+                "The file {} does not exist".format(packageListFile)
+            )
+        if not path.exists(outputfile):
+            raise FileNotFoundError("The path {} does not exist".format(outputfile))
+        if logfile is not None and not path.exists(logfile):
+            raise FileNotFoundError("The path {} does not exist".format(logfile))
+
+        self.__outputfile = outputfile
+        with open(packageListFile) as f:
+            self.__packageList: List[str] = [line.rstrip() for line in f.readlines()]
+        self.__logger = (
+            get_logger("PyexecMiner", logfile) if logfile is not None else None
+        )
+
+    def mine(self) -> None:
+        miner = Miner(self.__packageList, self.__logger)
+        result: List[PackageInfo] = miner.infer_environments()
+
+        with open(self.__outputfile, "w") as f:
+            f.write(", ".join(str(e) for e in result))
+
+
+def main(argv: List[str]) -> None:
+    print(argv)
+    if not len(argv) == 3 and not len(argv) == 4:
+        print(
+            "Need two or three arguments: The package file, output file and optionally logfile"
+        )
+    elif len(argv) == 3:
+        miner = PyexecMiner(argv[1], argv[2])
+        miner.mine()
+    else:
+        miner = PyexecMiner(argv[1], argv[2], argv[3])
+        miner.mine()

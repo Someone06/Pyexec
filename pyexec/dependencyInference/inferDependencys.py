@@ -4,15 +4,14 @@ from os import path
 from typing import List, Optional
 
 from pyexec.util.list import flatten, remove_duplicates
-from pyexec.util.logging import get_logger
 from pyexec.util.shell import run_command
 
 
 class InferDockerfile:
-    class NoEnviromentFoundExcpetion(Exception):
+    class NoEnvironmentFoundException(Exception):
         pass
 
-    class DirectoryNotFoundExcpetion(Exception):
+    class DirectoryNotFoundException(Exception):
         pass
 
     class NotADirectoryException(Exception):
@@ -21,12 +20,9 @@ class InferDockerfile:
     class TimeoutException(Exception):
         pass
 
-    __projectPath: str
-    __logger: Logger
-
-    def __init__(self, projectPath: str, logfile: Optional[str] = None) -> None:
+    def __init__(self, projectPath: str, logger: Optional[Logger] = None) -> None:
         if not path.exists(projectPath):
-            raise InferDockerfile.DirectoryNotFoundExcpetion(
+            raise InferDockerfile.DirectoryNotFoundException(
                 "There is no file or directory named " + projectPath
             )
         elif not path.isdir(projectPath):
@@ -35,28 +31,29 @@ class InferDockerfile:
             )
         else:
             self.__projectPath = projectPath
-            self.__logger = get_logger(__name__, logfile)
+            self.__logger = logger
 
     def inferDockerfile(self, timeout: Optional[int] = None) -> str:
-        self.__logger.info("Start inferring dependencies")
+        self.__log_info("Start inferring dependencies")
         files: List[str] = self.__find_python_files()
-        self.__logger.debug("Files found: ")
-        self.__logger.debug(*files)
+        self.__log_debug("Files found: ")
+        self.__log_debug(" ".join(files))
         dockerfiles: List[str] = []
 
         for f in files:
-            self.__logger.debug("Inferring file: " + f)
+            self.__log_debug("Inferring file: " + f)
             dockerfiles.append(self.__execute_v2(f, timeout))
-            self.__logger.debug("Inferring for file " + f + "successful")
+            self.__log_debug("Inferring for file " + f + "successful")
         return self.__mergeDockerfiles(dockerfiles)
 
     def __find_python_files(self) -> List[str]:
-        command: str = "find " + self.__projectPath + " -type f -name '*.py' -not -name 'test*' -not -name '__init__.py'"
+        command: str = "find " + self.__projectPath + " -type f -name '*.py' -not -path '*tests*' -not -name '__init__.py' -not -name 'setup.py' -not -path '*doc*' -not -path '*examples*'"
         out, _ = run_command(command)
         return out.splitlines()
 
     def __execute_v2(self, filePath: str, timeout: Optional[int] = None) -> str:
-        command: str = 'v2 run --projectdir "' + self.__projectPath + '" --environment "PYTHONPATH=$(find' + self.__projectPath + " -not -path '*/\\.*' -not path '*__pycache__*' -type d -printf \":%p\" | sed \"s|" + self.__projectPath + '|/mnt/projectdir/|g")" ' + filePath
+        command: str = 'v2 run --projectdir "' + self.__projectPath + '" --environment "PYTHONPATH=$(find ' + self.__projectPath + " -not -path '*/\\.*' -not path '*__pycache__*' -type d -printf \":%p\" | sed \"s|" + self.__projectPath + '|/mnt/projectdir|g")" ' + filePath
+        self.__log_debug("Calling v2: {}".format(command))
 
         try:
             out, _ = run_command(command, timeout)
@@ -67,7 +64,8 @@ class InferDockerfile:
 
         out = out.strip()
         if out == "":
-            raise InferDockerfile.NoEnviromentFoundExcpetion(
+            self.__log_debug("No dockerfile for module {}".format(filePath))
+            raise InferDockerfile.NoEnvironmentFoundException(
                 "V2 is unable to infer a working environment for package " + filePath
             )
         else:
@@ -79,5 +77,13 @@ class InferDockerfile:
             f.pop()
             f.pop(1)
         file = "\n".join(remove_duplicates(flatten(lines)))
-        self.__logger.debug("The found dockerfile is: " + file)
+        self.__log_debug("The found dockerfile is: " + file)
         return file
+
+    def __log_info(self, msg: str) -> None:
+        if self.__logger is not None:
+            self.__logger.info(msg)
+
+    def __log_debug(self, msg: str) -> None:
+        if self.__logger is not None:
+            self.__logger.debug(msg)
