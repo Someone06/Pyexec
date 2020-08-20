@@ -17,3 +17,10 @@ def test_test_runner():
     result = id.inferDockerfile()
     print(result)
     assert False
+
+
+def test_test_runner_timeout():
+    with pytest.raises(InferDockerfile.TimeoutException):
+        id: InferDockerfile = InferDockerfile("/home/michael/test-runner")
+        result = id.inferDockerfile(3)
+        print(result)

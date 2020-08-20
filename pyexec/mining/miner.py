@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from logging import Logger
-from os import path
+from os import listdir, path
 from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional, Tuple
 
@@ -53,9 +53,8 @@ class Miner:
 
             with TemporaryDirectory() as tmp:
                 gitrequest.grab(tmp)
-                inferdockerfile = InferDockerfile(
-                    path.join(tmp, p.capitalize()), self.__logger
-                )
+                projectdir = path.join(tmp, listdir()[0])
+                inferdockerfile = InferDockerfile(projectdir, self.__logger)
 
                 try:
                     info.dockerfile = inferdockerfile.inferDockerfile()

@@ -1,10 +1,12 @@
-import subprocess
 from logging import Logger
 from os import path
+from timeit import default_timer as time
 from typing import List, Optional
 
+from plumbum import local
+from plumbum.cmd import find, sed, timeout
+
 from pyexec.util.list import flatten, remove_duplicates
-from pyexec.util.shell import run_command
 
 
 class InferDockerfile:
@@ -30,46 +32,111 @@ class InferDockerfile:
                 "The project path" + projectPath + " is not a directory"
             )
         else:
-            self.__projectPath = projectPath
+            self.__projectPath = projectPath.rstrip("/")
+            self.__v2 = local["v2"]
+            self.__pythonPath = (
+                find[
+                    self.__projectPath,
+                    "-type",
+                    "d",
+                    "-not",
+                    "-path",
+                    "*/\\.*",
+                    "-not",
+                    "-path",
+                    "*__pycache__*",
+                    "-printf",
+                    ":%p",
+                ]
+                | sed["s|{}|/mnt/projectdir|g".format(self.__projectPath)]
+            )()
             self.__logger = logger
 
     def inferDockerfile(self, timeout: Optional[int] = None) -> str:
         self.__log_info("Start inferring dependencies")
         files: List[str] = self.__find_python_files()
-        self.__log_debug("Files found: ")
-        self.__log_debug(" ".join(files))
+        self.__log_debug("Files found:\n{}".format("\t\n".join(files)))
         dockerfiles: List[str] = []
+        startTime = time()
 
         for f in files:
             self.__log_debug("Inferring file: " + f)
-            dockerfiles.append(self.__execute_v2(f, timeout))
-            self.__log_debug("Inferring for file " + f + "successful")
+            if timeout is not None:
+                runtime = time() - startTime
+                if runtime < timeout:
+                    df = self.__execute_v2(f, int(timeout - runtime))
+                else:
+                    df = None
+            else:
+                df = self.__execute_v2(f, None)
+
+            if timeout is not None:
+                runtime = int(time() - startTime)
+                if (
+                    runtime + 2 >= timeout
+                ):  # The + 2 is needed because of measurement inaccuracies
+                    raise InferDockerfile.TimeoutException("V2 timeout")
+            if df is None:
+                raise InferDockerfile.NoEnvironmentFoundException(
+                    "V2 was unable to infer a working environment"
+                )
+            else:
+                dockerfiles.append(df)
+                self.__log_debug("Inferring for file " + f + "successful")
         return self.__mergeDockerfiles(dockerfiles)
 
     def __find_python_files(self) -> List[str]:
-        command: str = "find " + self.__projectPath + " -type f -name '*.py' -not -path '*tests*' -not -name '__init__.py' -not -name 'setup.py' -not -path '*doc*' -not -path '*examples*'"
-        out, _ = run_command(command)
-        return out.splitlines()
+        command = find[
+            self.__projectPath,
+            "-type",
+            "f",
+            "-name",
+            "*.py",
+            "-not",
+            "-path",
+            "*tests*",
+            "-not",
+            "-path",
+            "*doc*",
+            "-not",
+            "-path",
+            "*examples*",
+            "-not",
+            "-name",
+            "setup.py",
+            "-not",
+            "-name",
+            "__init__.py",
+        ]
+        return command().splitlines()
 
-    def __execute_v2(self, filePath: str, timeout: Optional[int] = None) -> str:
-        command: str = 'v2 run --projectdir "' + self.__projectPath + '" --environment "PYTHONPATH=$(find ' + self.__projectPath + " -not -path '*/\\.*' -not path '*__pycache__*' -type d -printf \":%p\" | sed \"s|" + self.__projectPath + '|/mnt/projectdir|g")" ' + filePath
-        self.__log_debug("Calling v2: {}".format(command))
-
-        try:
-            out, _ = run_command(command, timeout)
-        except subprocess.TimeoutExpired:
-            raise InferDockerfile.TimeoutException(
-                "A timeout happend during execution of v2"
-            )
-
-        out = out.strip()
-        if out == "":
-            self.__log_debug("No dockerfile for module {}".format(filePath))
-            raise InferDockerfile.NoEnvironmentFoundException(
-                "V2 is unable to infer a working environment for package " + filePath
-            )
+    def __execute_v2(self, filePath: str, tout: Optional[int] = None) -> Optional[str]:
+        if tout is not None:
+            command = timeout[
+                tout,
+                "v2",
+                "run",
+                "--projectdir",
+                self.__projectPath,
+                "--environment",
+                "PYTHONPATH={}".format(self.__pythonPath),
+                filePath,
+            ]
         else:
-            return out
+            command = self.__v2[
+                "run",
+                "--projectdir",
+                self.__projectPath,
+                "--environment",
+                "PYTHONPATH={}".format(self.__pythonPath),
+                filePath,
+            ]
+        _, out, _ = command.run(retcode=None)
+        lines = out.splitlines()
+        if len(lines) >= 2 and lines[0] == "FROM python:3.8":
+            return lines
+        else:
+            return None
 
     def __mergeDockerfiles(self, dockerfiles: List[str]) -> str:
         lines: List[List[str]] = [f.splitlines() for f in dockerfiles]
