@@ -6,6 +6,7 @@ from glob import glob
 from logging import Logger
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+import git
 from git import Blob, Commit, Repo, TagObject, Tree
 from plumbum import local
 from pydriller import RepositoryMining
@@ -25,6 +26,9 @@ class RepositoryCommit:
 
 
 class GitRequest:
+    class GitRepoNotFoundException(Exception):
+        pass
+
     """A wrapper for a Git repository to mine information from the repository."""
 
     def __init__(
@@ -50,7 +54,8 @@ class GitRequest:
         self.__test_run_results = None
         self.__type_annotations: Set[str] = set()
 
-    def grab(self, tmp_dir: str, testing: bool = False) -> Dict[str, RepositoryCommit]:
+    #    def grab(self, tmp_dir: str, testing: bool = False) -> Dict[str, RepositoryCommit]:
+    def grab(self, tmp_dir: str, testing: bool = False) -> None:
         """
         Mine the data from the checked-out repository.
 
@@ -63,9 +68,15 @@ class GitRequest:
             url = "https://github.com/{}/{}".format(self.__repo_user, self.__repo_name)
         else:
             url = "git@github.com:{}/{}".format(self.__repo_user, self.__repo_name)
-        repo = Repo.clone_from(url, path)
-        repo_mining = RepositoryMining(path)
 
+        try:
+            repo = Repo.clone_from(url, path)
+        except git.exc.GitCommandError:
+            self.__log_info("GitHub repository {} is not accessible".format(url))
+            raise GitRequest.GitRepoNotFoundException("{} is inaccessible".format(url))
+
+        repo_mining = RepositoryMining(path)
+        """ 
         self.__num_commits, commits = self.__find_flaw_referencing_commits(repo_mining)
         issue_ids = self.__extract_issue_ids(commits)
         commits = self.__add_issue_ids_to_commits(issue_ids, commits)
@@ -77,8 +88,8 @@ class GitRequest:
         self.__test_frameworks = self.__detect_test_frameworks(path)
         #        self._test_run_results = self._extract_test_run_results(path)
         self.__type_annotations = self.__detect_type_annotations(path)
-
         return commits
+        """
 
     @property
     def num_lines(self) -> int:
@@ -354,6 +365,10 @@ class GitRequest:
     def __log_debug(self, msg: str):
         if self.__logger is not None:
             self.__logger.debug(msg)
+
+    def __log_info(self, msg: str):
+        if self.__logger is not None:
+            self.__logger.info((msg))
 
     """
     def _extract_test_run_results(self, path: Union[bytes, str]) -> Optional[RunResult]:

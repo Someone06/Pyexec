@@ -20,6 +20,9 @@ class PackageInfo:
     repo_user: Optional[str] = None
     repo_name: Optional[str] = None
     dockerfile: Optional[str] = None
+    has_requirementstxt: bool = False
+    has_setuppy: bool = False
+    has_makefile: bool = False
 
 
 class Miner:
@@ -52,8 +55,18 @@ class Miner:
             gitrequest = GitRequest(user, name, self.__logger)
 
             with TemporaryDirectory() as tmp:
-                gitrequest.grab(tmp)
-                projectdir = path.join(tmp, listdir()[0])
+                try:
+                    gitrequest.grab(tmp)
+                except GitRequest.GitRepoNotFoundException:
+                    continue
+                projectdir = path.join(tmp, listdir(tmp)[0])
+                assert path.exists(projectdir)
+                info.has_requirementstxt = path.exists(
+                    path.join(projectdir, "requirements.txt")
+                )
+                info.has_makefile = path.exists(path.join(projectdir, "Makefile"))
+                info.has_setuppy = path.exists(path.join(projectdir, "setup.py"))
+
                 inferdockerfile = InferDockerfile(projectdir, self.__logger)
 
                 try:
@@ -64,7 +77,6 @@ class Miner:
                 except InferDockerfile.TimeoutException:
                     self.__log_info("v2 timed out on package {}".format(p))
                     continue
-
         return result
 
     def __log_debug(self, msg: str) -> None:
@@ -79,78 +91,35 @@ class Miner:
         if self.__logger is not None:
             self.__logger.warning(msg)
 
-    @staticmethod
-    def __has_github_repository(repo_info: Dict[str, str]) -> bool:
-        return (
-            "github.com" in repo_info["download_url"]
-            or "github.com" in repo_info["home_page"]
-        )
-
-    @staticmethod
-    def __has_github_link_on_readthedocs(repo_info: Dict[str, str]) -> bool:
-        if (
-            "readthedocs" not in repo_info["download_url"]
-            and "readthedocs" not in repo_info["home_page"]
-        ):
-            return False
-
-        if "readthedocs" in repo_info["download_url"]:
-            site = repo_info["download_url"]
-        else:
-            site = repo_info["home_page"]
-
-        content = BeautifulSoup(
-            requests.get(url=site, stream=True).content, "html.parser"
-        )
-        for link in content.findAll("a"):
-            if "github.com" in link.get("href"):
-                return True
-        return False
-
     def __extract_repository_path(
         self, repo_info: Dict[str, str]
     ) -> Optional[Tuple[str, str]]:
         def slash_stripper(string: str) -> str:
-            return string[:-1] if string[-1] == "/" else string
+            return string.rstrip("/")
 
-        if self.__has_github_repository(repo_info):
-            if "github.com" in repo_info["download_url"]:
-                matches = self.__github_regex.match(
-                    slash_stripper(repo_info["download_url"])
+        fields: List[str] = ["home_page", "download_url"]
+        for field in fields:
+            matches = self.__github_regex.match(slash_stripper(repo_info[field]))
+            if matches is not None:
+                user, name = matches.group(3), matches.group(4)
+                return user.split("/", 1)[0], name.split("/", 1)[0]
+
+        for field in fields:
+            if "readthedocs" in repo_info[field]:
+                content = BeautifulSoup(
+                    requests.get(url=repo_info[field], stream=True).content,
+                    "html.parser",
                 )
-            else:
-                matches = self.__github_regex.match(
-                    slash_stripper(repo_info["home_page"])
-                )
-            assert matches is not None
-            user, name = matches.group(3), matches.group(4)
-            # Remove trailing things after slashes and only keep first part
-            return user.split("/", 1)[0], name.split("/", 1)[0]
-
-        elif self.__has_github_link_on_readthedocs(repo_info):
-            if "readthedocs" in repo_info["download_url"]:
-                site = repo_info["download_url"]
-            else:
-                site = repo_info["home_page"]
-
-            content = BeautifulSoup(
-                requests.get(url=site, stream=True).content, "html.parser"
-            )
-            matches = None
-            for link in content.findAll("a"):
-                if "github.com" in link.get("href"):
-                    matches = self.__github_regex.match(
-                        slash_stripper(link.get("href"))
-                    )
-                    break
-            assert matches is not None
-            user, name = matches.group(3), matches.group(4)
-
-            # Remove trailing things after slashes and only keep first part
-            return user.split("/", 1)[0], name.split("/", 1)[0]
-
-        else:
-            return None
+                matches = None
+                for link in content.findAll("a"):
+                    if "github.com" in link.get("href"):
+                        matches = self.__github_regex.match(
+                            slash_stripper(link.get("href"))
+                        )
+                    if matches is not None:
+                        user, name = matches.group(3), matches.group(4)
+                        return user.split("/", 1)[0], name.split("/", 1)[0]
+        return None
 
 
 class PyexecMiner:
@@ -176,6 +145,26 @@ class PyexecMiner:
     def mine(self) -> None:
         miner = Miner(self.__packageList, self.__logger)
         result: List[PackageInfo] = miner.infer_environments()
+        githubs = 0
+        rqs = 0
+        setups = 0
+        makes = 0
+
+        for i in result:
+            if i.repo_user is not None:
+                githubs = githubs + 1
+            if i.has_requirementstxt:
+                rqs = rqs + 1
+            if i.has_setuppy:
+                setups = setups + 1
+            if i.has_makefile:
+                makes = makes + 1
+
+        print(
+            "Stats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\n".format(
+                len(result), githubs, setups, rqs, makes
+            )
+        )
 
         with open(self.__outputfile, "w") as f:
             f.write(", ".join(str(e) for e in result))
