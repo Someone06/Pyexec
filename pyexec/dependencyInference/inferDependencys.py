@@ -41,10 +41,19 @@ class InferDockerfile:
                     "d",
                     "-not",
                     "-path",
-                    "*/\\.*",
+                    "*__pycache__*",
                     "-not",
                     "-path",
-                    "*__pycache__*",
+                    "*tests*",
+                    "-not",
+                    "-path",
+                    "*doc*",
+                    "-not",
+                    "-path",
+                    "*.git*",
+                    "-not",
+                    "-path",
+                    "*examples*",
                     "-printf",
                     ":%p",
                 ]
@@ -53,7 +62,9 @@ class InferDockerfile:
             self.__logger = logger
 
     def inferDockerfile(self, timeout: Optional[int] = None) -> str:
-        self.__log_info("Start inferring dependencies")
+        self.__log_info(
+            "Start inferring dependencies for package {}".format(self.__projectPath)
+        )
         files: List[str] = self.__find_python_files()
         self.__log_debug("Files found:\n{}".format("\t\n".join(files)))
         dockerfiles: List[str] = []
@@ -82,7 +93,7 @@ class InferDockerfile:
                 )
             else:
                 dockerfiles.append(df)
-                self.__log_debug("Inferring for file " + f + "successful")
+                self.__log_debug("Inferring for file " + f + " successful")
         return self.__mergeDockerfiles(dockerfiles)
 
     def __find_python_files(self) -> List[str]:
@@ -94,6 +105,9 @@ class InferDockerfile:
             "*.py",
             "-not",
             "-path",
+            "*__pycache__*",
+            "-not",
+            "-path",
             "*tests*",
             "-not",
             "-path",
@@ -101,6 +115,9 @@ class InferDockerfile:
             "-not",
             "-path",
             "*examples*",
+            "-not",
+            "-path",
+            "*.git*",
             "-not",
             "-name",
             "setup.py",
@@ -111,6 +128,7 @@ class InferDockerfile:
         return command().splitlines()
 
     def __execute_v2(self, filePath: str, tout: Optional[int] = None) -> Optional[str]:
+        print(self.__pythonPath)
         if tout is not None:
             command = timeout[
                 tout,
@@ -131,7 +149,12 @@ class InferDockerfile:
                 "PYTHONPATH={}".format(self.__pythonPath),
                 filePath,
             ]
-        _, out, _ = command.run(retcode=None)
+
+        try:
+            _, out, _ = command.run(retcode=None)
+        except OSError:
+            self.__log_warning("Caught OSError")
+            return None  # Reason this can be thrown: Too long argument list
         lines = out.splitlines()
         if len(lines) >= 2 and lines[0] == "FROM python:3.8":
             return lines
@@ -154,3 +177,7 @@ class InferDockerfile:
     def __log_debug(self, msg: str) -> None:
         if self.__logger is not None:
             self.__logger.debug(msg)
+
+    def __log_warning(self, msg: str) -> None:
+        if self.__logger is not None:
+            self.__logger.warning(msg)

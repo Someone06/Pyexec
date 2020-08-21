@@ -54,29 +54,39 @@ class Miner:
             info.repo_name = name
             gitrequest = GitRequest(user, name, self.__logger)
 
-            with TemporaryDirectory() as tmp:
-                try:
-                    gitrequest.grab(tmp)
-                except GitRequest.GitRepoNotFoundException:
-                    continue
-                projectdir = path.join(tmp, listdir(tmp)[0])
-                assert path.exists(projectdir)
-                info.has_requirementstxt = path.exists(
-                    path.join(projectdir, "requirements.txt")
-                )
-                info.has_makefile = path.exists(path.join(projectdir, "Makefile"))
-                info.has_setuppy = path.exists(path.join(projectdir, "setup.py"))
+            try:
+                with TemporaryDirectory() as tmp:
+                    try:
+                        gitrequest.grab(tmp)
+                    except GitRequest.GitRepoNotFoundException:
+                        continue
+                    projectdir = path.join(tmp, listdir(tmp)[0])
+                    assert path.exists(projectdir)
+                    info.has_requirementstxt = path.exists(
+                        path.join(projectdir, "requirements.txt")
+                    )
+                    info.has_makefile = path.exists(path.join(projectdir, "Makefile"))
+                    info.has_setuppy = path.exists(path.join(projectdir, "setup.py"))
 
-                inferdockerfile = InferDockerfile(projectdir, self.__logger)
+                    inferdockerfile = InferDockerfile(projectdir, self.__logger)
 
-                try:
-                    info.dockerfile = inferdockerfile.inferDockerfile()
-                except InferDockerfile.NoEnvironmentFoundException:
-                    self.__log_info("No environment found for package {}".format(p))
-                    continue
-                except InferDockerfile.TimeoutException:
-                    self.__log_info("v2 timed out on package {}".format(p))
-                    continue
+                    try:
+                        info.dockerfile = inferdockerfile.inferDockerfile()
+                    except InferDockerfile.NoEnvironmentFoundException:
+                        self.__log_info("No environment found for package {}".format(p))
+                        continue
+                    except InferDockerfile.TimeoutException:
+                        self.__log_info("v2 timed out on package {}".format(p))
+                        continue
+            except PermissionError:
+                continue
+                """ Found Repos on GitHub which have a __pycache__ subdirectory with root permission.
+                Trying to delete such a directory causes a PermissonError.
+                The temporary directory is places in /tmp so it will be eventually clean up when
+                shutting down the computer.
+                Note: Creating a temporary directory in the (user owned) home folder does not solve
+                this problem.
+            """
         return result
 
     def __log_debug(self, msg: str) -> None:

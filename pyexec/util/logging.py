@@ -18,7 +18,7 @@ def get_logger(name: str, filename: Optional[str] = None) -> logging.Logger:
         logger.addHandler(log_file)
 
     console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
+    console.setLevel(logging.DEBUG)
     console.setFormatter(logging.Formatter("[%(levelname)s](%(name)s): %(message)s"))
     logger.addHandler(console)
     return logger
