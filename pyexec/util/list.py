@@ -10,3 +10,14 @@ def flatten(lists: List[List[T]]) -> List[T]:
 
 def remove_duplicates(lst: List[T]) -> List[T]:
     return list(OrderedDict.fromkeys(lst))
+
+
+def all_equal(lst: List[T]) -> bool:
+    if len(lst) == 0:
+        return True
+
+    first = lst[0]
+    for e in lst:
+        if not e == first:
+            return False
+    return True

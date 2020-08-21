@@ -6,7 +6,7 @@ from typing import List, Optional
 from plumbum import local
 from plumbum.cmd import find, sed, timeout
 
-from pyexec.util.list import flatten, remove_duplicates
+from pyexec.util.dependencies import Dependencies
 
 
 class InferDockerfile:
@@ -61,13 +61,13 @@ class InferDockerfile:
             )()
             self.__logger = logger
 
-    def inferDockerfile(self, timeout: Optional[int] = None) -> str:
+    def inferDockerfile(self, timeout: Optional[int] = None) -> Dependencies:
         self.__log_info(
             "Start inferring dependencies for package {}".format(self.__projectPath)
         )
         files: List[str] = self.__find_python_files()
         self.__log_debug("Files found:\n{}".format("\t\n".join(files)))
-        dockerfiles: List[str] = []
+        dependencies: List[Dependencies] = []
         startTime = time()
 
         for f in files:
@@ -92,9 +92,9 @@ class InferDockerfile:
                     "V2 was unable to infer a working environment"
                 )
             else:
-                dockerfiles.append(df)
+                dependencies.append(df)
                 self.__log_debug("Inferring for file " + f + " successful")
-        return self.__mergeDockerfiles(dockerfiles)
+        return Dependencies.merge_dependencies(dependencies)
 
     def __find_python_files(self) -> List[str]:
         command = find[
@@ -127,7 +127,9 @@ class InferDockerfile:
         ]
         return command().splitlines()
 
-    def __execute_v2(self, filePath: str, tout: Optional[int] = None) -> Optional[str]:
+    def __execute_v2(
+        self, filePath: str, tout: Optional[int] = None
+    ) -> Optional[Dependencies]:
         print(self.__pythonPath)
         if tout is not None:
             command = timeout[
@@ -155,20 +157,16 @@ class InferDockerfile:
         except OSError:
             self.__log_warning("Caught OSError")
             return None  # Reason this can be thrown: Too long argument list
+
         lines = out.splitlines()
-        if len(lines) >= 2 and lines[0] == "FROM python:3.8":
-            return lines
+        if len(lines) >= 1 and lines[0].startswith("FROM python:"):
+            try:
+                return Dependencies.from_dockerfile(out)
+            except Dependencies.InvalidFormatException:
+                self.__log_warning("V2 produced invalid dockerfile")
+                return None
         else:
             return None
-
-    def __mergeDockerfiles(self, dockerfiles: List[str]) -> str:
-        lines: List[List[str]] = [f.splitlines() for f in dockerfiles]
-        for f in lines:
-            f.pop()
-            f.pop(1)
-        file = "\n".join(remove_duplicates(flatten(lines)))
-        self.__log_debug("The found dockerfile is: " + file)
-        return file
 
     def __log_info(self, msg: str) -> None:
         if self.__logger is not None:

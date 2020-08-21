@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
 from pyexec.mining.gitrequest import GitRequest
 from pyexec.mining.pypirequest import PyPIRequest
+from pyexec.util.dependencies import Dependencies
 from pyexec.util.logging import get_logger
 
 
@@ -19,7 +20,7 @@ class PackageInfo:
     name: str
     repo_user: Optional[str] = None
     repo_name: Optional[str] = None
-    dockerfile: Optional[str] = None
+    dockerfile: Optional[Dependencies] = None
     has_requirementstxt: bool = False
     has_setuppy: bool = False
     has_makefile: bool = False
