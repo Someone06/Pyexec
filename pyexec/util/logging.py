@@ -1,13 +1,14 @@
 import logging
+from pathlib import Path
 from typing import Optional
 
 
-def get_logger(name: str, filename: Optional[str] = None) -> logging.Logger:
+def get_logger(name: str, filepath: Optional[Path] = None) -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
 
-    if filename:
-        log_file = logging.FileHandler(filename)
+    if filepath:
+        log_file = logging.FileHandler(filepath)
         log_file.setFormatter(
             logging.Formatter(
                 "%(asctime)s [%(levelname)s](%(name)s:%(funcName)s:%(lineno)d): "

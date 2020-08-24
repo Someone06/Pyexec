@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
-from logging import Logger
 from os import listdir, path
+from pathlib import Path, PurePath
 from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional, Tuple
 
@@ -11,6 +11,9 @@ from bs4 import BeautifulSoup
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
 from pyexec.mining.gitrequest import GitRequest
 from pyexec.mining.pypirequest import PyPIRequest
+from pyexec.testruner.runresult import CoverageResult, TestResult
+from pyexec.testrunner.runner import AbstractRunner
+from pyexec.testrunner.runners.pytestrunner import PytestRunner
 from pyexec.util.dependencies import Dependencies
 from pyexec.util.logging import get_logger
 
@@ -21,15 +24,18 @@ class PackageInfo:
     repo_user: Optional[str] = None
     repo_name: Optional[str] = None
     dockerfile: Optional[Dependencies] = None
+    test_result: Optional[TestResult] = None
+    test_coverage: Optional[CoverageResult] = None
     has_requirementstxt: bool = False
     has_setuppy: bool = False
     has_makefile: bool = False
 
 
 class Miner:
-    def __init__(self, packages: List[str], logger: Optional[Logger] = None):
+    def __init__(self, packages: List[str], logfile: Optional[Path] = None):
         self.__packages = packages
-        self.__logger = logger
+        self.__logfile = logfile
+        self.__logger = get_logger("Pyexec::Miner", logfile)
         self.__github_regex = re.compile(
             r"(http[s]?://)?(www.)?github.com/([^/]*)/(.*)", re.IGNORECASE
         )
@@ -43,12 +49,14 @@ class Miner:
             pypirequest = PyPIRequest(p, self.__logger)
             pypi_info = pypirequest.get_result_from_url()
             if pypi_info is None:
-                self.__log_warning("No PyPI information found for package {}".format(p))
+                self.__logger.warning(
+                    "No PyPI information found for package {}".format(p)
+                )
                 continue
 
             ghpath = self.__extract_repository_path(pypi_info)
             if ghpath is None:
-                self.__log_info("No Github link found for package {}".format(p))
+                self.__logger.info("No Github link found for package {}".format(p))
                 continue
             user, name = ghpath
             info.repo_user = user
@@ -56,29 +64,44 @@ class Miner:
             gitrequest = GitRequest(user, name, self.__logger)
 
             try:
-                with TemporaryDirectory() as tmp:
+                with TemporaryDirectory() as directory:
+                    tmp = Path(directory)
                     try:
-                        gitrequest.grab(tmp)
+                        gitrequest.grab(str(tmp))
                     except GitRequest.GitRepoNotFoundException:
                         continue
-                    projectdir = path.join(tmp, listdir(tmp)[0])
-                    assert path.exists(projectdir)
+                    projectdir: Path = PurePath.joinpath(
+                        Path(tmp), Path(listdir(tmp)[0])
+                    )
+                    assert Path.exists(projectdir)
                     info.has_requirementstxt = path.exists(
                         path.join(projectdir, "requirements.txt")
                     )
                     info.has_makefile = path.exists(path.join(projectdir, "Makefile"))
                     info.has_setuppy = path.exists(path.join(projectdir, "setup.py"))
 
-                    inferdockerfile = InferDockerfile(projectdir, self.__logger)
+                    inferdockerfile = InferDockerfile(projectdir, self.__logfile)
 
                     try:
-                        info.dockerfile = inferdockerfile.inferDockerfile()
+                        info.dockerfile = inferdockerfile.infer_dockerfile()
                     except InferDockerfile.NoEnvironmentFoundException:
-                        self.__log_info("No environment found for package {}".format(p))
+                        self.__logger.info(
+                            "No environment found for package {}".format(p)
+                        )
                         continue
                     except InferDockerfile.TimeoutException:
-                        self.__log_info("v2 timed out on package {}".format(p))
+                        self.__logger.info("v2 timed out on package {}".format(p))
                         continue
+
+                    if info.dockerfile is not None:
+                        runner: AbstractRunner = PytestRunner(
+                            Path(tmp), projectdir.name, info.dockerfile, self.__logfile
+                        )
+                        if runner.is_used_in_project():
+                            testresult, coverage = runner.run()
+                            info.test_result = testresult
+                            info.test_coverage = coverage
+
             except PermissionError:
                 continue
                 """ Found Repos on GitHub which have a __pycache__ subdirectory with root permission.
@@ -89,18 +112,6 @@ class Miner:
                 this problem.
             """
         return result
-
-    def __log_debug(self, msg: str) -> None:
-        if self.__logger is not None:
-            self.__logger.debug(msg)
-
-    def __log_info(self, msg: str) -> None:
-        if self.__logger is not None:
-            self.__logger.info(msg)
-
-    def __log_warning(self, msg: str) -> None:
-        if self.__logger is not None:
-            self.__logger.warning(msg)
 
     def __extract_repository_path(
         self, repo_info: Dict[str, str]
@@ -149,12 +160,10 @@ class PyexecMiner:
         self.__outputfile = outputfile
         with open(packageListFile) as f:
             self.__packageList: List[str] = [line.rstrip() for line in f.readlines()]
-        self.__logger = (
-            get_logger("PyexecMiner", logfile) if logfile is not None else None
-        )
+        self.__logfile = Path(logfile) if logfile is not None else None
 
     def mine(self) -> None:
-        miner = Miner(self.__packageList, self.__logger)
+        miner = Miner(self.__packageList, self.__logfile)
         result: List[PackageInfo] = miner.infer_environments()
         githubs = 0
         rqs = 0

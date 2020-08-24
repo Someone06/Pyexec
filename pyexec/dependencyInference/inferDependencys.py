@@ -1,5 +1,4 @@
-from logging import Logger
-from os import path
+from pathlib import Path
 from timeit import default_timer as time
 from typing import List, Optional
 
@@ -7,6 +6,7 @@ from plumbum import local
 from plumbum.cmd import find, sed, timeout
 
 from pyexec.util.dependencies import Dependencies
+from pyexec.util.logging import get_logger
 
 
 class InferDockerfile:
@@ -22,17 +22,17 @@ class InferDockerfile:
     class TimeoutException(Exception):
         pass
 
-    def __init__(self, projectPath: str, logger: Optional[Logger] = None) -> None:
-        if not path.exists(projectPath):
+    def __init__(self, projectPath: Path, logfile: Optional[Path] = None) -> None:
+        if not Path.exists(projectPath):
             raise InferDockerfile.DirectoryNotFoundException(
-                "There is no file or directory named " + projectPath
+                "There is no file or directory named {}".format(projectPath)
             )
-        elif not path.isdir(projectPath):
+        elif not Path.is_dir(projectPath):
             raise InferDockerfile.NotADirectoryException(
-                "The project path" + projectPath + " is not a directory"
+                "The project path {} is not a directory".format(projectPath)
             )
         else:
-            self.__projectPath = projectPath.rstrip("/")
+            self.__projectPath = projectPath
             self.__v2 = local["v2"]
             self.__pythonPath = (
                 find[
@@ -59,19 +59,21 @@ class InferDockerfile:
                 ]
                 | sed["s|{}|/mnt/projectdir|g".format(self.__projectPath)]
             )()
-            self.__logger = logger
+            self.__logger = get_logger("Pyexec::InferDockerfile", logfile)
 
-    def inferDockerfile(self, timeout: Optional[int] = None) -> Dependencies:
-        self.__log_info(
+    def infer_dockerfile(self, timeout: Optional[int] = None) -> Dependencies:
+        self.__logger.info(
             "Start inferring dependencies for package {}".format(self.__projectPath)
         )
-        files: List[str] = self.__find_python_files()
-        self.__log_debug("Files found:\n{}".format("\t\n".join(files)))
+        files: List[Path] = self.__find_python_files()
+        self.__logger.debug(
+            "Files found:\n{}".format("\t\n".join(map(lambda p: str(p), files)))
+        )
         dependencies: List[Dependencies] = []
         startTime = time()
 
         for f in files:
-            self.__log_debug("Inferring file: " + f)
+            self.__logger.debug("Inferring file: {}".format(f))
             if timeout is not None:
                 runtime = time() - startTime
                 if runtime < timeout:
@@ -93,10 +95,10 @@ class InferDockerfile:
                 )
             else:
                 dependencies.append(df)
-                self.__log_debug("Inferring for file " + f + " successful")
+                self.__logger.debug("Inferring for file {} successful".format(f))
         return Dependencies.merge_dependencies(dependencies)
 
-    def __find_python_files(self) -> List[str]:
+    def __find_python_files(self) -> List[Path]:
         command = find[
             self.__projectPath,
             "-type",
@@ -125,12 +127,11 @@ class InferDockerfile:
             "-name",
             "__init__.py",
         ]
-        return command().splitlines()
+        return [Path(line) for line in command().splitlines()]
 
     def __execute_v2(
-        self, filePath: str, tout: Optional[int] = None
+        self, filePath: Path, tout: Optional[int] = None
     ) -> Optional[Dependencies]:
-        print(self.__pythonPath)
         if tout is not None:
             command = timeout[
                 tout,
@@ -155,7 +156,7 @@ class InferDockerfile:
         try:
             _, out, _ = command.run(retcode=None)
         except OSError:
-            self.__log_warning("Caught OSError")
+            self.__logger.warning("Caught OSError")
             return None  # Reason this can be thrown: Too long argument list
 
         lines = out.splitlines()
@@ -163,19 +164,7 @@ class InferDockerfile:
             try:
                 return Dependencies.from_dockerfile(out)
             except Dependencies.InvalidFormatException:
-                self.__log_warning("V2 produced invalid dockerfile")
+                self.__logger.warning("V2 produced invalid dockerfile")
                 return None
         else:
             return None
-
-    def __log_info(self, msg: str) -> None:
-        if self.__logger is not None:
-            self.__logger.info(msg)
-
-    def __log_debug(self, msg: str) -> None:
-        if self.__logger is not None:
-            self.__logger.debug(msg)
-
-    def __log_warning(self, msg: str) -> None:
-        if self.__logger is not None:
-            self.__logger.warning(msg)

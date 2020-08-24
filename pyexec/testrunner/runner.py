@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from logging import Logger
 from pathlib import Path, PurePath
 from typing import Optional, Tuple
 
 from plumbum import docker
+from pyexc.util.logging import get_logger
 
 from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
@@ -15,7 +15,7 @@ class AbstractRunner(ABC):
         tmp_path: Path,
         project_name: str,
         dependencies: Dependencies,
-        logger: Logger,
+        logfile: Optional[Path] = None,
     ) -> None:
         if not tmp_path.exists() or not tmp_path.is_dir():
             raise NotADirectoryError(
@@ -34,7 +34,7 @@ class AbstractRunner(ABC):
         self._project_name = project_name
         self._project_path = project_path
         self._dependencies = dependencies
-        self._logger = logger
+        self._logger = get_logger("Pyexec:AbstractRunner", logfile)
 
     @abstractmethod
     def run(self) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:

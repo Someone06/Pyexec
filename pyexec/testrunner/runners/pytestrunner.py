@@ -1,5 +1,4 @@
 import re
-from logging import Logger
 from pathlib import Path, PurePath
 from typing import Optional, Tuple
 
@@ -16,12 +15,12 @@ class PytestRunner(AbstractRunner):
         tmp_path: Path,
         project_name: str,
         dependencies: Dependencies,
-        logger: Logger,
+        logfile: Optional[Path] = None,
     ) -> None:
-        super().__init__(tmp_path, project_name, dependencies, logger)
+        super().__init__(tmp_path, project_name, dependencies, logfile)
 
     def run(self) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
-        if not self.used_in_project():
+        if not self.is_used_in_project():
             return None, None
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
         self._dependencies.set_cmd_command(
@@ -32,7 +31,7 @@ class PytestRunner(AbstractRunner):
         out, _ = self._run_container()
         return PytestRunner.__extract_run_results(out)
 
-    def used_in_project(self) -> bool:
+    def is_used_in_project(self) -> bool:
         setup_path = PurePath.joinpath(self._project_path, "setup.py")
         if Path.exists(setup_path) and Path.is_file(setup_path):
             for file in ["pytest", "py.test"]:
