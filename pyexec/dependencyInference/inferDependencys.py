@@ -66,6 +66,14 @@ class InferDockerfile:
             "Start inferring dependencies for package {}".format(self.__projectPath)
         )
         files: List[Path] = self.__find_python_files()
+        if len(files) == 0:
+            self.__logger.warning(
+                "No files found for project {}".format(self.__projectPath.name)
+            )
+            raise InferDockerfile.NoEnvironmentFoundException(
+                "No file found for project {}".format(self.__projectPath.name)
+            )
+
         dependencies: List[Dependencies] = []
         startTime = time()
 
