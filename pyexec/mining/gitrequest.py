@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from glob import glob
 from logging import Logger
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import git
@@ -11,6 +12,8 @@ from git import Blob, Commit, Repo, TagObject, Tree
 from plumbum import local
 from pydriller import RepositoryMining
 from pydriller.domain.commit import Modification
+
+from pyexec.util.logging import get_logger
 
 
 @dataclass
@@ -29,14 +32,12 @@ class GitRequest:
     class GitRepoNotFoundException(Exception):
         pass
 
-    """A wrapper for a Git repository to mine information from the repository."""
-
     def __init__(
-        self, repo_user: str, repo_name: str, logger: Optional[Logger]
+        self, repo_user: str, repo_name: str, logfile: Optional[Path] = None
     ) -> None:
         self.__repo_user = repo_user
         self.__repo_name = repo_name
-        self.__logger = logger
+        self.__logger = get_logger("Pyexec::GitRequest", logfile)
 
         self.__commits: Dict[str, Dict[str, Any]] = dict()
         self.__close_regex = re.compile(
@@ -55,7 +56,7 @@ class GitRequest:
         self.__type_annotations: Set[str] = set()
 
     #    def grab(self, tmp_dir: str, testing: bool = False) -> Dict[str, RepositoryCommit]:
-    def grab(self, tmp_dir: str, testing: bool = False) -> None:
+    def grab(self, tmp_dir: Path, testing: bool = False) -> None:
         """
         Mine the data from the checked-out repository.
 
@@ -63,7 +64,7 @@ class GitRequest:
         :param testing: Indicates whether we are in testing mode or not.
         :return: A mapping of results.
         """
-        path = os.path.join(tmp_dir, self.__repo_name)
+        path = tmp_dir.joinpath(self.__repo_name)
         if testing:
             url = "https://github.com/{}/{}".format(self.__repo_user, self.__repo_name)
         else:
@@ -72,11 +73,11 @@ class GitRequest:
         try:
             repo = Repo.clone_from(url, path)
         except git.exc.GitCommandError:
-            self.__log_info("GitHub repository {} is not accessible".format(url))
+            self.__logger.info("GitHub repository {} is not accessible".format(url))
             raise GitRequest.GitRepoNotFoundException("{} is inaccessible".format(url))
 
+        """
         repo_mining = RepositoryMining(path)
-        """ 
         self.__num_commits, commits = self.__find_flaw_referencing_commits(repo_mining)
         issue_ids = self.__extract_issue_ids(commits)
         commits = self.__add_issue_ids_to_commits(issue_ids, commits)
@@ -137,7 +138,7 @@ class GitRequest:
                 for m in modifications
             ]
 
-        self.__log_debug("Search for flaws in commit message")
+        self.__logger.debug("Search for flaws in commit message")
         commit_counter: int = 0
         commits: Dict[str, RepositoryCommit] = dict()
 
@@ -166,7 +167,7 @@ class GitRequest:
     def __extract_issue_ids(
         self, commits: Dict[str, RepositoryCommit]
     ) -> Dict[str, Set[str]]:
-        self.__log_debug("Extract issue IDs")
+        self.__logger.debug("Extract issue IDs")
 
         issue_ids: Dict[str, Set[str]] = {}
         for commit, values in commits.items():
@@ -227,7 +228,7 @@ class GitRequest:
 
     # flake8: noqa: C901
     def __detect_test_frameworks(self, path: Union[bytes, str]) -> Optional[Set[str]]:
-        self.__log_debug("Searching for test framework")
+        self.__logger.debug("Searching for test framework")
         grep = local["grep"]
         frameworks = set()
 
@@ -361,14 +362,6 @@ class GitRequest:
             frameworks.add("aspectlib")
 
         return frameworks if len(frameworks) > 0 else None
-
-    def __log_debug(self, msg: str):
-        if self.__logger is not None:
-            self.__logger.debug(msg)
-
-    def __log_info(self, msg: str):
-        if self.__logger is not None:
-            self.__logger.info((msg))
 
     """
     def _extract_test_run_results(self, path: Union[bytes, str]) -> Optional[RunResult]:

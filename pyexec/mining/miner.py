@@ -1,8 +1,7 @@
 import re
 import time
 from dataclasses import dataclass
-from os import listdir, path
-from pathlib import Path, PurePath
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional, Tuple
 
@@ -42,13 +41,15 @@ class Miner:
             r"(http[s]?://)?(www.)?github.com/([^/]*)/(.*)", re.IGNORECASE
         )
 
-    def infer_environments(self) -> List[PackageInfo]:
+    def mine(self) -> List[PackageInfo]:
+        self.__logger.info("Starting to mine")
         result: List[PackageInfo] = list()
 
         for p in self.__packages:
+            self.__logger.info("Mining package {}".format(p))
             info = PackageInfo(name=p)
             result.append(info)
-            pypirequest = PyPIRequest(p, self.__logger)
+            pypirequest = PyPIRequest(p, self.__logfile)
             pypi_info = pypirequest.get_result_from_url()
             if pypi_info is None:
                 self.__logger.warning(
@@ -63,27 +64,34 @@ class Miner:
             user, name = ghpath
             info.repo_user = user
             info.repo_name = name
-            gitrequest = GitRequest(user, name, self.__logger)
+            gitrequest = GitRequest(user, name, self.__logfile)
 
             try:
                 with TemporaryDirectory() as directory:
                     tmp = Path(directory)
                     try:
-                        gitrequest.grab(str(tmp))
+                        gitrequest.grab(tmp)
                     except GitRequest.GitRepoNotFoundException:
+                        self.__logger.info(
+                            "Cound not clone package {} from GitHub".format(p)
+                        )
                         continue
-                    projectdir: Path = PurePath.joinpath(
-                        Path(tmp), Path(listdir(tmp)[0])
-                    )
-                    assert Path.exists(projectdir)
-                    info.has_requirementstxt = path.exists(
-                        path.join(projectdir, "requirements.txt")
-                    )
-                    info.has_makefile = path.exists(path.join(projectdir, "Makefile"))
-                    info.has_setuppy = path.exists(path.join(projectdir, "setup.py"))
+                    tmp_content = list(tmp.iterdir())
+                    if len(tmp_content) != 1:
+                        self.__logger.error(
+                            "Check out of repository for packages {} did not work".format(
+                                p
+                            )
+                        )
+                        continue
+                    projectdir = tmp_content[0]
+                    info.has_requirementstxt = projectdir.joinpath(
+                        "requirements.txt"
+                    ).exists()
+                    info.has_makefile = projectdir.joinpath("Makefile").exists()
+                    info.has_setuppy = projectdir.joinpath("setup.py").exists()
 
                     inferdockerfile = InferDockerfile(projectdir, self.__logfile)
-
                     try:
                         info.dockerfile = inferdockerfile.infer_dockerfile()
                     except InferDockerfile.NoEnvironmentFoundException:
@@ -97,14 +105,14 @@ class Miner:
 
                     if info.dockerfile is not None:
                         runner: AbstractRunner = PytestRunner(
-                            Path(tmp), projectdir.name, info.dockerfile, self.__logfile
+                            tmp, projectdir.name, info.dockerfile, self.__logfile
                         )
                         if runner.is_used_in_project():
                             testresult, coverage = runner.run()
                             info.test_result = testresult
                             info.test_coverage = coverage
-
-            except PermissionError:
+            except PermissionError as e:
+                self.__logger.warning("Caught Error: {}".format(e))
                 continue
                 """ Found Repos on GitHub which have a __pycache__ subdirectory with root permission.
                 Trying to delete such a directory causes a PermissonError.
@@ -113,6 +121,9 @@ class Miner:
                 Note: Creating a temporary directory in the (user owned) home folder does not solve
                 this problem.
             """
+            except Exception as e:
+                self.__logger.warning("Caught unknown excption: {}".format(e))
+                continue
         return result
 
     def __extract_repository_path(
@@ -156,7 +167,7 @@ class PyexecMiner:
 
     def mine(self) -> None:
         miner = Miner(self.__package_list, self.__logfile)
-        result = miner.infer_environments()
+        result = miner.mine()
         githubs = 0
         rqs = 0
         setups = 0
@@ -172,14 +183,13 @@ class PyexecMiner:
             if i.has_makefile:
                 makes = makes + 1
 
-        print(
-            "Stats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\n".format(
-                len(result), githubs, setups, rqs, makes
-            )
-        )
-
         with open(self.__outputfile, "w") as f:
             f.write(", ".join(str(e) for e in result))
+            f.write(
+                "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\n".format(
+                    len(result), githubs, setups, rqs, makes
+                )
+            )
 
 
 def main(argv: List[str]) -> None:

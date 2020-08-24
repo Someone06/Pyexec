@@ -66,9 +66,6 @@ class InferDockerfile:
             "Start inferring dependencies for package {}".format(self.__projectPath)
         )
         files: List[Path] = self.__find_python_files()
-        self.__logger.debug(
-            "Files found:\n{}".format("\t\n".join(map(lambda p: str(p), files)))
-        )
         dependencies: List[Dependencies] = []
         startTime = time()
 
