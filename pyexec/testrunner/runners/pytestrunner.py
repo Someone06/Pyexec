@@ -1,27 +1,39 @@
-import os
 import re
 from logging import Logger
 from pathlib import Path, PurePath
-from typing import Optional
+from typing import Optional, Tuple
 
 from plumbum import grep
 
 from pyexec.testrunner.runner import AbstractRunner
-from pyexec.testrunner.runresult import RunResult
+from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencys import Dependencies
 
 
-class PyTestRunner(AbstractRunner):
+class PytestRunner(AbstractRunner):
     def __init__(
-        self, project_path: Path, dependencies: Dependencies, logger: Optional[Logger]
+        self,
+        tmp_path: Path,
+        project_name: str,
+        dependencies: Dependencies,
+        logger: Logger,
     ) -> None:
-        super().__init__(project_path, dependencies, logger)
+        super().__init__(tmp_path, project_name, dependencies, logger)
 
-    def run(self) -> Optional[RunResult]:
-        return None
+    def run(self) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
+        if not self.used_in_project():
+            return None, None
+        self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
+        self._dependencies.set_cmd_command(
+            r'CMD ["pytest", "--cov={}", "-report=term-missing"]'.format(
+                self._project_name
+            )
+        )
+        out, _ = self._run_container()
+        return PytestRunner.__extract_run_results(out)
 
     def used_in_project(self) -> bool:
-        setup_path = PurePath.joinpath(self.project_path, "setup.py")
+        setup_path = PurePath.joinpath(self._project_path, "setup.py")
         if Path.exists(setup_path) and Path.is_file(setup_path):
             for file in ["pytest", "py.test"]:
                 _, r, _ = grep["test_suite={}".format(file), setup_path].run(
@@ -30,26 +42,22 @@ class PyTestRunner(AbstractRunner):
                 if len(r) > 0:
                     return True
 
-        pyini_path = PurePath.joinpath(self.project_path, "pytest.ini")
-        if os.path.exists(pyini_path) and os.path.isfile(pyini_path):
+        pyini_path = PurePath.joinpath(self._project_path, "pytest.ini")
+        if Path.exists(pyini_path) and Path.is_file(pyini_path):
             return True
 
         for stmt in ["import pytest", "from pytest import", "pytest"]:
-            _, r, _ = grep["-R", stmt, self.project_path].run(retcode=None)
+            _, r, _ = grep["-R", stmt, self._project_path].run(retcode=None)
             if len(r) > 0:
                 return True
         return False
 
-    def __extract_run_result(self, log: str) -> RunResult:
-        statements = -1
-        missing = -1
-        coverage = -1.0
-        failed = -1
-        passed = -1
-        skipped = -1
-        warnings = -1
-        error = -1
-        time = -1.0
+    @staticmethod
+    def __extract_run_results(
+        log: str,
+    ) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
+        test_result = None
+        coverage_result = None
 
         matches = re.search(
             r"[=]+ (([0-9]+) failed, )?"
@@ -67,12 +75,20 @@ class PyTestRunner(AbstractRunner):
             warnings = int(matches.group(7)) if matches.group(7) else 0
             error = int(matches.group(9)) if matches.group(9) else 0
             time = float(matches.group(10)) if matches.group(10) else 0.0
+            test_result = TestResult(
+                failed=failed,
+                passed=passed,
+                skipped=skipped,
+                warnings=warnings,
+                error=error,
+                time=time,
+            )
 
         matches = re.search(
             r"TOTAL\s+"
             r"([0-9]+)\s+"
             r"([0-9]+)\s+"
-            r"(([0-9]+)\s+([0-9]+)\s+)?"
+            r"(([0-9]+)\s(+([0-9]+)\s+)?"
             r"([0-9]+%)",
             log,
         )
@@ -80,6 +96,10 @@ class PyTestRunner(AbstractRunner):
             statements = int(matches.group(1)) if matches.group(1) else 0
             missing = int(matches.group(2)) if matches.group(2) else 0
             coverage = float(matches.group(6)[:-1]) if matches.group(6) else 0.0
+            coverage_result = CoverageResult(
+                statements=statements, missing=missing, coverage=coverage
+            )
+
         else:
             matches = re.search(
                 r".py\s+"
@@ -93,16 +113,8 @@ class PyTestRunner(AbstractRunner):
                 statements = int(matches.group(1)) if matches.group(1) else 0
                 missing = int(matches.group(2)) if matches.group(2) else 0
                 coverage = float(matches.group(6)[:-1]) if matches.group(6) else 0.0
+                coverage_result = CoverageResult(
+                    statements=statements, missing=missing, coverage=coverage
+                )
 
-        result = RunResult(
-            statements=statements,
-            missing=missing,
-            coverage=coverage,
-            failed=failed,
-            passed=passed,
-            skipped=skipped,
-            warnings=warnings,
-            error=error,
-            time=time,
-        )
-        return result
+        return test_result, coverage_result
