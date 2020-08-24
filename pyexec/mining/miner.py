@@ -1,4 +1,5 @@
 import re
+import time
 from dataclasses import dataclass
 from os import listdir, path
 from pathlib import Path, PurePath
@@ -7,13 +8,14 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
+from plumbum.cmd import grep, sed, shuf, wget
 
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
 from pyexec.mining.gitrequest import GitRequest
 from pyexec.mining.pypirequest import PyPIRequest
-from pyexec.testruner.runresult import CoverageResult, TestResult
 from pyexec.testrunner.runner import AbstractRunner
 from pyexec.testrunner.runners.pytestrunner import PytestRunner
+from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
 from pyexec.util.logging import get_logger
 
@@ -146,25 +148,15 @@ class Miner:
 
 class PyexecMiner:
     def __init__(
-        self, packageListFile: str, outputfile: str, logfile: Optional[str] = None
+        self, package_list: List[str], outputfile: Path, logfile: Optional[Path] = None
     ) -> None:
-        if not path.exists(packageListFile) or not path.isfile(packageListFile):
-            raise FileNotFoundError(
-                "The file {} does not exist".format(packageListFile)
-            )
-        if not path.exists(outputfile):
-            raise FileNotFoundError("The path {} does not exist".format(outputfile))
-        if logfile is not None and not path.exists(logfile):
-            raise FileNotFoundError("The path {} does not exist".format(logfile))
-
+        self.__package_list = package_list
         self.__outputfile = outputfile
-        with open(packageListFile) as f:
-            self.__packageList: List[str] = [line.rstrip() for line in f.readlines()]
-        self.__logfile = Path(logfile) if logfile is not None else None
+        self.__logfile = logfile
 
     def mine(self) -> None:
-        miner = Miner(self.__packageList, self.__logfile)
-        result: List[PackageInfo] = miner.infer_environments()
+        miner = Miner(self.__package_list, self.__logfile)
+        result = miner.infer_environments()
         githubs = 0
         rqs = 0
         setups = 0
@@ -191,14 +183,41 @@ class PyexecMiner:
 
 
 def main(argv: List[str]) -> None:
-    print(argv)
-    if not len(argv) == 3 and not len(argv) == 4:
-        print(
-            "Need two or three arguments: The package file, output file and optionally logfile"
-        )
-    elif len(argv) == 3:
-        miner = PyexecMiner(argv[1], argv[2])
-        miner.mine()
+    if len(argv) <= 1:
+        print("Please specify the number of arguments")
+    elif len(argv) > 2:
+        print("Please specify only one argument: The number of packages to try to mine")
     else:
-        miner = PyexecMiner(argv[1], argv[2], argv[3])
-        miner.mine()
+        n = string_to_int(argv[1])
+        if n is None or n <= 0:
+            print(
+                "Please specify an positive integer as the number of packages to try to infer"
+            )
+        else:
+            output_dir = (
+                Path.home()
+                .joinpath("pyexec-output")
+                .joinpath(time.strftime("%Y%m%d-%H%M%S"))
+            )
+            output_dir.mkdir(parents=True)
+            get_packages = (
+                wget["-q", "-O-", "pypi.org/simple"]
+                | grep["/simple/"]
+                | sed['s|    <a href="/simple/||g']
+                | sed["s|/.*||g"]
+                | shuf["-n", n]
+            )
+            packages = get_packages().splitlines()
+            miner = PyexecMiner(
+                packages,
+                output_dir.joinpath("output.txt"),
+                output_dir.joinpath("log.txt"),
+            )
+            miner.mine()
+
+
+def string_to_int(i: str) -> Optional[int]:
+    try:
+        return int(i)
+    except ValueError:
+        return None

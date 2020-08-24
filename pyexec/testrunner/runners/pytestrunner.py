@@ -2,11 +2,11 @@ import re
 from pathlib import Path, PurePath
 from typing import Optional, Tuple
 
-from plumbum import grep
+from plumbum.cmd import grep
 
 from pyexec.testrunner.runner import AbstractRunner
 from pyexec.testrunner.runresult import CoverageResult, TestResult
-from pyexec.util.dependencys import Dependencies
+from pyexec.util.dependencies import Dependencies
 
 
 class PytestRunner(AbstractRunner):

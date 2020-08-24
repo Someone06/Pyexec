@@ -2,11 +2,11 @@ from abc import ABC, abstractmethod
 from pathlib import Path, PurePath
 from typing import Optional, Tuple
 
-from plumbum import docker
-from pyexc.util.logging import get_logger
+from plumbum.cmd import docker
 
 from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
+from pyexec.util.logging import get_logger
 
 
 class AbstractRunner(ABC):
