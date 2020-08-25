@@ -5,8 +5,10 @@ from typing import Optional
 
 def get_logger(name: str, filepath: Optional[Path] = None) -> logging.Logger:
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    if logger.hasHandlers():  # Logger already configured
+        return logger
 
+    logger.setLevel(logging.DEBUG)
     if filepath:
         log_file = logging.FileHandler(filepath)
         log_file.setFormatter(
