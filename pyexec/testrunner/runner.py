@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path, PurePath
 from typing import Optional, Tuple
 
-from plumbum.cmd import docker
+from plumbum.cmd import docker, timeout
 
 from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
@@ -44,20 +44,38 @@ class AbstractRunner(ABC):
     def is_used_in_project(self) -> bool:
         raise NotImplementedError("Implement is_used_in_project()")
 
-    def _run_container(self) -> Tuple[str, str]:
+    def _run_container(self, tout: Optional[int] = None) -> Optional[Tuple[str, str]]:
         self._dependencies.add_copy_command(
             "COPY {} /tmp/{}/".format(self._project_name, self._project_name)
+        )
+        self._dependencies.set_workdir_command(
+            "WORKDIR /tmp/{}".format(self._project_name)
         )
         self._logger.debug("Writing Dockerfile")
         with open(self._tmp_path.joinpath("Dockerfile"), "w") as f:
             f.write(self._dependencies.to_dockerfile())
         self._logger.debug("Building docker image")
         docker["build", "-t", "pyexec/container", str(self._tmp_path)]()
-        run_command = docker["run", "--rm", "pyexec/container"]
+
+        if timeout is not None:
+            run_command = timeout[tout, "docker", "run", "--rm", "pyexec/container"]
+        else:
+            run_command = docker["run", "--rm", "pyexec/container"]
         self._logger.debug("Running container")
-        _, out, err = run_command.run(retcode=None)
+        ret, out, err = run_command.run(retcode=None)
         self._logger.debug("Container done, removing image")
         docker[
             "rmi", docker["images", "pyexec/container", "-f", "dangling=true", "-q"]
-        ]()  # Delete image
-        return out, err
+        ]()
+
+        if (
+            timeout is not None and ret == 124
+        ):  # Timeout was triggered, see 'man timeout'
+            self._logger.warning(
+                "Timeout during test case execution for project {}".format(
+                    self._project_name
+                )
+            )
+            return None
+        else:
+            return out, err

@@ -11,15 +11,21 @@ class Dependencies:
     class InvalidFormatException(Exception):
         pass
 
-    __from: str
-    __run_commands: List[str] = []
-    __copy_commands: List[str] = []
-    __cmd_command: Optional[str] = None
-
     __from_regex: Pattern = re.compile(r"FROM python:3.\d")
     __run_regex: Pattern = re.compile(r'RUN \[("\w+",){2,}"\w+"(==\d+.\d+(.\d+)?)?\]')
     __copy_regex: Pattern = re.compile(r'COPY \["/?(\w+/)*\w+?",  "/?(\w+/)*\w+?"\]')
     __cmd_regex: Pattern = re.compile(r'CMD \["[\w+./]*"(, "[\w+./]*")*\]')
+    __workdir_regex: Pattern = re.compile(r"WORKDIR /?\w+(/\w+)*/?")
+
+    def __init__(self, from_clause: str) -> None:
+        if Dependencies.__full_match(from_clause, Dependencies.__from_regex):
+            self.__from: str = from_clause
+            self.__run_commands: List[str] = []
+            self.__copy_commands: List[str] = []
+            self.__workdir_command: Optional[str] = None
+            self.__cmd_command: Optional[str] = None
+        else:
+            raise Dependencies.InvalidFormatException("Invalid FROM clause")
 
     @classmethod
     def from_dockerfile(cls, dockerfile: str) -> Dependencies:
@@ -28,11 +34,7 @@ class Dependencies:
         if len(df) == 0:
             raise Dependencies.InvalidFormatException("dockerfile is empty")
 
-        if not Dependencies.__full_match(df[0], cls.__from_regex):
-            raise Dependencies.InvalidFormatException("Invalid FROM clause")
-
-        instance = cls()
-        instance.__from = df[0]
+        instance = Dependencies(df[0])
         for line in df:
             if Dependencies.__full_match(line, cls.__run_regex):
                 instance.__run_commands.append(line)
@@ -40,6 +42,12 @@ class Dependencies:
                 instance.__copy_commands.append(line)
             elif Dependencies.__full_match(line, cls.__cmd_regex):
                 instance.__cmd_command = line
+            elif Dependencies.__full_match(line, cls.__workdir_regex):
+                instance.__workdir_command = line
+            else:
+                raise Dependencies.InvalidFormatException(
+                    "Found invalid line in dockerfile: '{}'".format(line)
+                )
         return instance
 
     def to_dockerfile(self) -> str:
@@ -51,6 +59,8 @@ class Dependencies:
             df = df + run
         for copy in self.__copy_commands:
             df = df + copy
+        if self.__workdir_command is not None:
+            df = df + self.__workdir_command
         if self.__cmd_command is not None:
             df = df + self.__cmd_command
         return df
@@ -62,27 +72,39 @@ class Dependencies:
                 "Argument list must contain at least one element"
             )
 
-        if not all_equal(list(map(lambda d: d.__from, dependencies))):
+        froms = list(map(lambda d: d.__from, dependencies))
+        if not all_equal(froms):
             raise Dependencies.InvalidFormatException(
                 "Dependencies require different Python versions"
             )
 
-        cmds = list(map(lambda d: d.__cmd_command, dependencies))
-        if len(cmds) > 1:
+        work = list(map(lambda d: d.__workdir_command, dependencies))
+        if len(work) > 1 and not all_equal(work):
             raise Dependencies.InvalidFormatException(
-                "More then one Dependency includes a CMD command"
+                "Dockerfiles contain different WORKDIR commands"
+            )
+        cmds = list(map(lambda d: d.__cmd_command, dependencies))
+        if len(cmds) > 1 and not all_equal(cmds):
+            raise Dependencies.InvalidFormatException(
+                "Dockerfiles contain different CMD commands"
             )
 
-        instance = cls()
-        instance.__from = dependencies[0].__from
+        instance = Dependencies(froms[0])
         instance.__run_commands = flatten(
             list(map(lambda d: d.__run_commands, dependencies))
         )
         instance.__copy_commands = flatten(
             list(map(lambda d: d.__copy_commands, dependencies))
         )
+        instance.__workdir_command = work[0] if len(work) > 0 else None
         instance.__cmd_command = cmds[0] if len(cmds) > 0 else None
         return instance
+
+    def add_run_command(self, clause: str) -> None:
+        if not Dependencies.__full_match(clause, self.__run_regex):
+            raise Dependencies.InvalidFormatException("Argument is no valid RUN clause")
+        else:
+            self.__run_commands.append(clause)
 
     def add_copy_command(self, clause: str) -> None:
         if not Dependencies.__full_match(clause, self.__copy_regex):
@@ -92,17 +114,19 @@ class Dependencies:
         else:
             self.__copy_commands.append(clause)
 
+    def set_workdir_command(self, clause: str, *, replace: bool = True) -> None:
+        if not Dependencies.__full_match(clause, self.__workdir_regex):
+            raise Dependencies.InvalidFormatException(
+                "Argument is no valid WORKDIR clause"
+            )
+        elif self.__workdir_command is None or replace:
+            self.__workdir_command = clause
+
     def set_cmd_command(self, clause: str, *, replace: bool = True) -> None:
         if not Dependencies.__full_match(clause, self.__cmd_regex):
             raise Dependencies.InvalidFormatException("Argument is no valid CMD clause")
         elif self.__cmd_command is None or replace:
-            self.__command = clause
-
-    def add_run_command(self, clause: str) -> None:
-        if not Dependencies.__full_match(clause, self.__run_regex):
-            raise Dependencies.InvalidFormatException("Argument is no valid RUN clause")
-        else:
-            self.__run_commands.append(clause)
+            self.__cmd_command = clause
 
     @staticmethod
     def __full_match(candidate: str, pattern: Pattern) -> bool:

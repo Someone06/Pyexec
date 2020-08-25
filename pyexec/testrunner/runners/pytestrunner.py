@@ -19,17 +19,24 @@ class PytestRunner(AbstractRunner):
     ) -> None:
         super().__init__(tmp_path, project_name, dependencies, logfile)
 
-    def run(self) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
+    def run(
+        self, timeout: Optional[int] = None
+    ) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
         if not self.is_used_in_project():
             return None, None
+
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
         self._dependencies.set_cmd_command(
             r'CMD ["pytest", "--cov={}", "-report=term-missing"]'.format(
                 self._project_name
             )
         )
-        out, _ = self._run_container()
-        return PytestRunner.__extract_run_results(out)
+        result = self._run_container(timeout)
+        if result is None:
+            return None, None
+        else:
+            out, _ = result
+            return PytestRunner.__extract_run_results(out)
 
     def is_used_in_project(self) -> bool:
         setup_path = PurePath.joinpath(self._project_path, "setup.py")
