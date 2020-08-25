@@ -78,4 +78,5 @@ class AbstractRunner(ABC):
             )
             return None
         else:
+            self._logger.debug("Successfully run container")
             return out, err

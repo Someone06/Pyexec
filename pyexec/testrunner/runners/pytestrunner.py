@@ -25,6 +25,7 @@ class PytestRunner(AbstractRunner):
         if not self.is_used_in_project():
             return None, None
 
+        self._logger.debug("Setting up Dockerfile")
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
         self._dependencies.set_cmd_command(
             r'CMD ["pytest", "--cov={}", "-report=term-missing"]'.format(
@@ -36,6 +37,7 @@ class PytestRunner(AbstractRunner):
             return None, None
         else:
             out, _ = result
+            self._logger.debug("Extracting run results")
             return PytestRunner.__extract_run_results(out)
 
     def is_used_in_project(self) -> bool:
