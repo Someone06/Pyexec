@@ -116,11 +116,16 @@ class Miner:
                 continue
                 """ Found Repos on GitHub which have a __pycache__ subdirectory with root permission.
                 Trying to delete such a directory causes a PermissonError.
-                The temporary directory is places in /tmp so it will be eventually clean up when
+                The temporary directories are placed in /tmp so they will be eventually cleaned up when
                 shutting down the computer.
                 Note: Creating a temporary directory in the (user owned) home folder does not solve
                 this problem.
             """
+            except KeyboardInterrupt:
+                print(
+                    "Caught keyboard interrupt. Stopped mining. Returning already mined results"
+                )
+                return result
             except Exception as e:
                 self.__logger.warning("Caught unknown excption: {}".format(e))
                 continue
