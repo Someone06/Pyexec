@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Optional, Tuple
 
 from plumbum.cmd import docker, timeout
@@ -22,7 +22,7 @@ class AbstractRunner(ABC):
                 "The path {} does not refer to a directory".format(tmp_path)
             )
 
-        project_path = PurePath.joinpath(tmp_path, project_name)
+        project_path = tmp_path.joinpath(project_name)
         if not project_path.exists() or not project_path.is_dir():
             raise NotADirectoryError(
                 "There is not directory {} in directory {}".format(
@@ -30,8 +30,6 @@ class AbstractRunner(ABC):
                 )
             )
 
-        self._tmp_path = tmp_path
-        self._project_name = project_name
         self._project_path = project_path
         self._dependencies = dependencies
         self._logger = get_logger("Pyexec:AbstractRunner", logfile)
@@ -46,34 +44,35 @@ class AbstractRunner(ABC):
 
     def _run_container(self, tout: Optional[int] = None) -> Optional[Tuple[str, str]]:
         self._dependencies.add_copy_command(
-            "COPY {} /tmp/{}/".format(self._project_name, self._project_name)
+            "COPY {} /tmp/{}/".format(self._project_path.name, self._project_path.name)
         )
         self._dependencies.set_workdir_command(
-            "WORKDIR /tmp/{}".format(self._project_name)
+            "WORKDIR /tmp/{}".format(self._project_path.name)
         )
         self._logger.debug("Writing Dockerfile")
-        with open(self._tmp_path.joinpath("Dockerfile"), "w") as f:
+        with open(self._project_path.parent.joinpath("Dockerfile"), "w") as f:
             f.write(self._dependencies.to_dockerfile())
+
         self._logger.debug("Building docker image")
-        docker["build", "-t", "pyexec/container", str(self._tmp_path)]()
+        tag = "pyexec/{}".format(self._project_path.name)
+        docker["build", "-t", tag, self._project_path.parent]()
 
         if timeout is not None:
-            run_command = timeout[tout, "docker", "run", "--rm", "pyexec/container"]
+            run_command = timeout[tout, "docker", "run", "--rm", tag]
         else:
-            run_command = docker["run", "--rm", "pyexec/container"]
+            run_command = docker["run", "--rm", tag]
+
         self._logger.debug("Running container")
         ret, out, err = run_command.run(retcode=None)
         self._logger.debug("Container done, removing image")
-        docker[
-            "rmi", docker["images", "pyexec/container", "-f", "dangling=true", "-q"]
-        ]()
+        docker["rmi", docker["images", tag, "-f", "dangling=true", "-q"]]()
 
         if (
             timeout is not None and ret == 124
         ):  # Timeout was triggered, see 'man timeout'
             self._logger.warning(
                 "Timeout during test case execution for project {}".format(
-                    self._project_name
+                    self._project_path.name
                 )
             )
             return None

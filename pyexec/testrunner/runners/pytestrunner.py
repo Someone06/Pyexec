@@ -1,5 +1,5 @@
 import re
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Optional, Tuple
 
 from plumbum.cmd import grep
@@ -29,7 +29,7 @@ class PytestRunner(AbstractRunner):
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
         self._dependencies.set_cmd_command(
             r'CMD ["pytest", "--cov={}", "-report=term-missing"]'.format(
-                self._project_name
+                self._project_path.name
             )
         )
         result = self._run_container(timeout)
@@ -41,8 +41,8 @@ class PytestRunner(AbstractRunner):
             return PytestRunner.__extract_run_results(out)
 
     def is_used_in_project(self) -> bool:
-        setup_path = PurePath.joinpath(self._project_path, "setup.py")
-        if Path.exists(setup_path) and Path.is_file(setup_path):
+        setup_path = self._project_path.joinpath("setup.py")
+        if setup_path.exists() and setup_path.is_file():
             for file in ["pytest", "py.test"]:
                 _, r, _ = grep["test_suite={}".format(file), setup_path].run(
                     retcode=None
@@ -50,8 +50,8 @@ class PytestRunner(AbstractRunner):
                 if len(r) > 0:
                     return True
 
-        pyini_path = PurePath.joinpath(self._project_path, "pytest.ini")
-        if Path.exists(pyini_path) and Path.is_file(pyini_path):
+        pyini_path = self._project_path.joinpath("pytest.ini")
+        if pyini_path.exists() and pyini_path.is_file():
             return True
 
         for stmt in ["import pytest", "from pytest import", "pytest"]:
