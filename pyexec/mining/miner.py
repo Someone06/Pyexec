@@ -189,7 +189,7 @@ class PyexecMiner:
                 makes = makes + 1
 
         with open(self.__outputfile, "w") as f:
-            f.write(", ".join(str(e) for e in result))
+            f.write("\n".join(str(e) for e in result))
             f.write(
                 "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\n".format(
                     len(result), githubs, setups, rqs, makes

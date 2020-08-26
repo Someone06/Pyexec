@@ -138,6 +138,9 @@ class Dependencies:
         elif self.__cmd_command is None or replace:
             self.__cmd_command = clause
 
+    def __repr__(self) -> str:
+        return self.to_dockerfile()
+
     @staticmethod
     def __full_match(candidate: str, pattern: Pattern) -> bool:
         return pattern.match(candidate) is not None
