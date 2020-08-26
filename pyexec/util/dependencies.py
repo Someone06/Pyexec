@@ -61,18 +61,18 @@ class Dependencies:
         return instance
 
     def to_dockerfile(self) -> str:
-        remove_duplicates(self.__run_commands)
-        remove_duplicates(self.__copy_commands)
+        self.__run_commands = remove_duplicates(self.__run_commands)
+        self.__run_commands = remove_duplicates(self.__copy_commands)
 
-        df = self.__from
+        df = self.__from + "\n"
         for run in self.__run_commands:
-            df = df + run
+            df = df + run + "\n"
         for copy in self.__copy_commands:
-            df = df + copy
+            df = df + copy + "\n"
         if self.__workdir_command is not None:
-            df = df + self.__workdir_command
+            df = df + self.__workdir_command + "\n"
         if self.__cmd_command is not None:
-            df = df + self.__cmd_command
+            df = df + self.__cmd_command + "\n"
         return df
 
     @classmethod

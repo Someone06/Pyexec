@@ -23,3 +23,7 @@ def test_remove_duplicates_simple():
 
 def test_remove_duplicates_complex():
     assert remove_duplicates([1, 2, 1, 2, 3, 4, 3, 4, 2, 1, 4]) == [1, 2, 3, 4]
+
+
+def test_remove_dulicates_strings():
+    assert remove_duplicates(["Hello", "hello", "Hello"]) == ["Hello", "hello"]

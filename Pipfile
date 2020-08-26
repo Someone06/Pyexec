@@ -20,7 +20,7 @@ bs4 = "*"
 gitpython = "*"
 pydriller = "*"
 plumbum = "*"
-configparse = "*"
+configargparse = "*"
 
 [requires]
 python_version = "3.8"

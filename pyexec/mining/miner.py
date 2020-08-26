@@ -172,7 +172,7 @@ class PyexecMiner:
             self.__parser.format_help()
             sys.exit(0)
 
-        self.__config = self.__parser(argv[1:])
+        self.__config = self.__parser.parse_args(argv[1:])
         if self.__config.package_list is not None:
             self.__package_list = self.__packages_from_file(
                 Path(self.__config.package_list)
@@ -200,8 +200,8 @@ class PyexecMiner:
 
     @staticmethod
     def __packages_from_file(path: Path) -> List[str]:
-        if not path.exists() or path.is_file():
-            raise NotADirectoryError("Package file path is not a directory")
+        if not path.exists() or not path.is_file():
+            raise NotADirectoryError("Package path does not refer to a file")
         with open(path, "r") as f:
             packages = f.readlines()
         packages = [line.strip() for line in packages]
@@ -244,14 +244,14 @@ class PyexecMiner:
                 )
             )
 
+        for (c, d) in enumerate(map(lambda r: r.dockerfile, result)):
+            if d is not None:
+                with open(output_dir.joinpath("Dockerfile_{}".format(c)), "w") as f:
+                    f.write(d.to_dockerfile())
+
     @staticmethod
     def _create_parser() -> ArgParser:
-        parser = ArgParser(
-            fromfile_prefix_chars="@",
-            description="""
-            """,
-        )
-
+        parser = ArgParser()
         miner_source = parser.add_mutually_exclusive_group()
         miner_source.add_argument(
             "-p",
@@ -263,6 +263,7 @@ class PyexecMiner:
         miner_source.add_argument(
             "-r", "--random", dest="num", help="Try mining n random packages from PyPI"
         )
+        return parser
 
 
 def main(argv: List[str]) -> None:
