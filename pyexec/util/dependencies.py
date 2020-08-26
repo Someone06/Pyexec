@@ -11,11 +11,11 @@ class Dependencies:
     class InvalidFormatException(Exception):
         pass
 
-    __from_regex: Pattern = re.compile(r"FROM python:3.\d")
-    __run_regex: Pattern = re.compile(r'RUN \[("\w+",){2,}"\w+"(==\d+.\d+(.\d+)?)?\]')
-    __copy_regex: Pattern = re.compile(r'COPY \["/?(\w+/)*\w+?",  "/?(\w+/)*\w+?"\]')
-    __cmd_regex: Pattern = re.compile(r'CMD \["[\w+./]*"(, "[\w+./]*")*\]')
-    __workdir_regex: Pattern = re.compile(r"WORKDIR /?\w+(/\w+)*/?")
+    __from_regex: Pattern = re.compile(r"FROM python:3")
+    __run_regex: Pattern = re.compile(r"RUN ")
+    __copy_regex: Pattern = re.compile(r"COPY ")
+    __cmd_regex: Pattern = re.compile(r"CMD ")
+    __workdir_regex: Pattern = re.compile(r"WORKDIR ")
 
     def __init__(self, from_clause: str) -> None:
         if Dependencies.__full_match(from_clause, Dependencies.__from_regex):
@@ -28,7 +28,9 @@ class Dependencies:
             raise Dependencies.InvalidFormatException("Invalid FROM clause")
 
     @classmethod
-    def from_dockerfile(cls, dockerfile: str) -> Dependencies:
+    def from_dockerfile(
+        cls, dockerfile: str, drop_non_run_command: bool = True
+    ) -> Dependencies:
         df = dockerfile.splitlines()
 
         if len(df) == 0:
@@ -36,14 +38,22 @@ class Dependencies:
 
         instance = Dependencies(df[0])
         for line in df:
+            line = line.strip()
+            if line == "":
+                continue
+            if Dependencies.__full_match(line, cls.__from_regex):
+                continue
             if Dependencies.__full_match(line, cls.__run_regex):
                 instance.__run_commands.append(line)
             elif Dependencies.__full_match(line, cls.__copy_regex):
-                instance.__copy_commands.append(line)
+                if not drop_non_run_command:
+                    instance.__copy_commands.append(line)
             elif Dependencies.__full_match(line, cls.__cmd_regex):
-                instance.__cmd_command = line
+                if not drop_non_run_command:
+                    instance.__cmd_command = line
             elif Dependencies.__full_match(line, cls.__workdir_regex):
-                instance.__workdir_command = line
+                if not drop_non_run_command:
+                    instance.__workdir_command = line
             else:
                 raise Dependencies.InvalidFormatException(
                     "Found invalid line in dockerfile: '{}'".format(line)
@@ -130,5 +140,4 @@ class Dependencies:
 
     @staticmethod
     def __full_match(candidate: str, pattern: Pattern) -> bool:
-        match = pattern.match(candidate)
-        return match is not None and match.group() == candidate
+        return pattern.match(candidate) is not None

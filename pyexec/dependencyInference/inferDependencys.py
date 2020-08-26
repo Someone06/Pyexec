@@ -191,7 +191,9 @@ class InferDockerfile:
             try:
                 return Dependencies.from_dockerfile(out)
             except Dependencies.InvalidFormatException:
-                self.__logger.error("V2 produced ill-formatted dockerfile")
+                self.__logger.error(
+                    "V2 produced ill-formatted dockerfile:\n{}".format(out)
+                )
                 raise InferDockerfile.NoEnvironmentFoundException(
                     "V2 did produce an ill-formatted dockerfile"
                 )
