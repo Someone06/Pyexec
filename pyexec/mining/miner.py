@@ -1,4 +1,5 @@
 import re
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
+from configargparse import ArgParser
 from plumbum.cmd import grep, sed, shuf, wget
 
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
@@ -109,6 +111,7 @@ class Miner:
                         )
                         if runner.is_used_in_project():
                             testresult, coverage = runner.run()
+
                             info.test_result = testresult
                             info.test_coverage = coverage
             except PermissionError as e:
@@ -163,21 +166,66 @@ class Miner:
 
 
 class PyexecMiner:
-    def __init__(
-        self, package_list: List[str], outputfile: Path, logfile: Optional[Path] = None
-    ) -> None:
-        self.__package_list = package_list
-        self.__outputfile = outputfile
-        self.__logfile = logfile
+    def __init__(self, argv: List[str]) -> None:
+        self.__parser = self._create_parser()
+        if len(argv) == 0:
+            self.__parser.format_help()
+            sys.exit(0)
+
+        self.__config = self.__parser(argv[1:])
+        if self.__config.package_list is not None:
+            self.__package_list = self.__packages_from_file(
+                Path(self.__config.package_list)
+            )
+        elif self.__config.num:
+            n = self.__config.num
+            if n <= 0:
+                print("Package count must be >= 1")
+                raise ValueError("Package count must be >= 1")
+            else:
+                self.__package_list = self.__random_pypi_packages(n)
+        else:
+            self.__parser.format_help()
+            sys.exit(0)
+
+    @staticmethod
+    def __random_pypi_packages(n: int) -> List[str]:
+        return (
+            wget["-q", "-O-", "pypi.org/simple"]
+            | grep["/simple/"]
+            | sed['s|    <a href="/simple/||g']
+            | sed["s|/.*||g"]
+            | shuf["-n", n]().splitlines()
+        )
+
+    @staticmethod
+    def __packages_from_file(path: Path) -> List[str]:
+        if not path.exists() or path.is_file():
+            raise NotADirectoryError("Package file path is not a directory")
+        with open(path, "r") as f:
+            packages = f.readlines()
+        packages = [line.strip() for line in packages]
+        return packages
+
+    @staticmethod
+    def __create_output_dir() -> Path:
+        output_dir = (
+            Path.home()
+            .joinpath("pyexec-output")
+            .joinpath(time.strftime("%Y%m%d-%H%M%S"))
+        )
+        output_dir.mkdir(parents=True)
+        return output_dir
 
     def mine(self) -> None:
-        miner = Miner(self.__package_list, self.__logfile)
+        output_dir = self.__create_output_dir()
+        miner = Miner(self.__package_list, output_dir.joinpath("log.txt"))
         result = miner.mine()
+
         githubs = 0
         rqs = 0
         setups = 0
         makes = 0
-
         for i in result:
             if i.repo_user is not None:
                 githubs = githubs + 1
@@ -188,7 +236,7 @@ class PyexecMiner:
             if i.has_makefile:
                 makes = makes + 1
 
-        with open(self.__outputfile, "w") as f:
+        with open(output_dir.joinpath("output.txt"), "w") as f:
             f.write("\n".join(str(e) for e in result))
             f.write(
                 "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\n".format(
@@ -196,43 +244,27 @@ class PyexecMiner:
                 )
             )
 
+    @staticmethod
+    def _create_parser() -> ArgParser:
+        parser = ArgParser(
+            fromfile_prefix_chars="@",
+            description="""
+            """,
+        )
+
+        miner_source = parser.add_mutually_exclusive_group()
+        miner_source.add_argument(
+            "-p",
+            "--package-list",
+            dest="package_list",
+            help="Path to a file containing the package list to mine data from. "
+            "Each line of this list has to contain one package name on PyPI.",
+        )
+        miner_source.add_argument(
+            "-r", "--random", dest="num", help="Try mining n random packages from PyPI"
+        )
+
 
 def main(argv: List[str]) -> None:
-    if len(argv) <= 1:
-        print("Please specify the number of arguments")
-    elif len(argv) > 2:
-        print("Please specify only one argument: The number of packages to try to mine")
-    else:
-        n = string_to_int(argv[1])
-        if n is None or n <= 0:
-            print(
-                "Please specify an positive integer as the number of packages to try to infer"
-            )
-        else:
-            output_dir = (
-                Path.home()
-                .joinpath("pyexec-output")
-                .joinpath(time.strftime("%Y%m%d-%H%M%S"))
-            )
-            output_dir.mkdir(parents=True)
-            get_packages = (
-                wget["-q", "-O-", "pypi.org/simple"]
-                | grep["/simple/"]
-                | sed['s|    <a href="/simple/||g']
-                | sed["s|/.*||g"]
-                | shuf["-n", n]
-            )
-            packages = get_packages().splitlines()
-            miner = PyexecMiner(
-                packages,
-                output_dir.joinpath("output.txt"),
-                output_dir.joinpath("log.txt"),
-            )
-            miner.mine()
-
-
-def string_to_int(i: str) -> Optional[int]:
-    try:
-        return int(i)
-    except ValueError:
-        return None
+    miner = PyexecMiner(argv)
+    miner.mine()
