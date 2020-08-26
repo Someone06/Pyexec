@@ -43,6 +43,10 @@ class AbstractRunner(ABC):
         raise NotImplementedError("Implement is_used_in_project()")
 
     def _run_container(self, tout: Optional[int] = None) -> Optional[Tuple[str, str]]:
+        tag = "pyexec/{}".format(self._project_path.name.lower())
+        self._logger.debug("Cleaning up previous images")
+        self._remove_image(tag)
+
         self._dependencies.add_copy_command(
             "COPY {} /tmp/{}/".format(self._project_path.name, self._project_path.name)
         )
@@ -54,19 +58,18 @@ class AbstractRunner(ABC):
             f.write(self._dependencies.to_dockerfile())
 
         self._logger.debug("Building docker image")
-        tag = "pyexec/{}".format(self._project_path.name)
         docker["build", "-t", tag, self._project_path.parent]()
 
-        if timeout is not None:
-            run_command = timeout[tout, "docker", "run", "--rm", tag]
-        else:
-            run_command = docker["run", "--rm", tag]
+        #        if timeout is not None:
+        #            run_command = timeout[tout, "docker", "run", "--rm", tag]
+        #        else:
+        run_command = docker["run", "--rm", tag]
 
         self._logger.debug("Running container")
         ret, out, err = run_command.run(retcode=None)
+        self._logger.debug("Docker stdout:\n{}Docker stderr:\n{}".format(out, err))
         self._logger.debug("Container done, removing image")
-        docker["rmi", docker["images", tag, "-f", "dangling=true", "-q"]]()
-
+        self._remove_image(tag)
         if (
             timeout is not None and ret == 124
         ):  # Timeout was triggered, see 'man timeout'
@@ -79,3 +82,10 @@ class AbstractRunner(ABC):
         else:
             self._logger.debug("Successfully run container")
             return out, err
+
+    @staticmethod
+    def _remove_image(tag: str) -> None:
+        _, out, _ = docker["images", "-q", tag].run(retcode=None)
+        out = out.strip()
+        if out != "":
+            docker["rmi", out].run(retcode=None)

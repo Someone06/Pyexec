@@ -62,7 +62,7 @@ class Dependencies:
 
     def to_dockerfile(self) -> str:
         self.__run_commands = remove_duplicates(self.__run_commands)
-        self.__run_commands = remove_duplicates(self.__copy_commands)
+        self.__copy__commands = remove_duplicates(self.__copy_commands)
 
         df = self.__from + "\n"
         for run in self.__run_commands:

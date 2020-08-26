@@ -26,9 +26,10 @@ class PytestRunner(AbstractRunner):
             return None, None
 
         self._logger.debug("Setting up Dockerfile")
+        self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest"]')
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
         self._dependencies.set_cmd_command(
-            r'CMD ["pytest", "--cov={}", "-report=term-missing"]'.format(
+            r'CMD ["python", "-m", "pytest", "--cov={}", "-report=term-missing"]'.format(
                 self._project_path.name
             )
         )
@@ -54,7 +55,7 @@ class PytestRunner(AbstractRunner):
         if pyini_path.exists() and pyini_path.is_file():
             return True
 
-        for stmt in ["import pytest", "from pytest import", "pytest"]:
+        for stmt in ["import pytest", "from pytest import"]:
             _, r, _ = grep["-R", stmt, self._project_path].run(retcode=None)
             if len(r) > 0:
                 return True
