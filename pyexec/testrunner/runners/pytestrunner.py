@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 
 from plumbum.cmd import grep
 
-from pyexec.testrunner.runner import AbstractRunner
+from pyexec.testrunner.runner import AbstractRunner, RunnerNotUsedException
 from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
 
@@ -19,27 +19,24 @@ class PytestRunner(AbstractRunner):
     ) -> None:
         super().__init__(tmp_path, project_name, dependencies, logfile)
 
-    def run(
-        self, timeout: Optional[int] = None
-    ) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
+    def run(self, timeout: Optional[int] = None) -> Tuple[TestResult, CoverageResult]:
         if not self.is_used_in_project():
-            return None, None
+            raise RunnerNotUsedException(
+                "Pytest is not used in project {}".format(self._project_path.name)
+            )
+        self._add_dependencies()
+        out, err = self._run(timeout)
+        return self._extract_run_results(out)
 
-        self._logger.debug("Setting up Dockerfile")
+    def _add_dependencies(self) -> None:
+        self._logger.debug("Adding dependencies")
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest"]')
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
         self._dependencies.set_cmd_command(
-            r'CMD ["python", "-m", "pytest", "--cov={}", "-report=term-missing"]'.format(
+            r'CMD ["python", "-m", "pytest", "-r", "--cov={}", "-report=term-missing"]'.format(
                 self._project_path.name
             )
         )
-        result = self._run_container(timeout)
-        if result is None:
-            return None, None
-        else:
-            out, _ = result
-            self._logger.debug("Extracting run results")
-            return PytestRunner.__extract_run_results(out)
 
     def is_used_in_project(self) -> bool:
         setup_path = self._project_path.joinpath("setup.py")
@@ -61,10 +58,8 @@ class PytestRunner(AbstractRunner):
                 return True
         return False
 
-    @staticmethod
-    def __extract_run_results(
-        log: str,
-    ) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
+    def _extract_run_results(self, log: str) -> Tuple[TestResult, CoverageResult]:
+        self._logger.debug("Parsing run results")
         test_result = None
         coverage_result = None
 
@@ -126,4 +121,8 @@ class PytestRunner(AbstractRunner):
                     statements=statements, missing=missing, coverage=coverage
                 )
 
-        return test_result, coverage_result
+        if test_result is None or coverage_result is None:
+            self._logger.debug("Unexpected output format of pytest and pytest-cov")
+            raise ValueError("Unexpected output format of pytest and pytest-cov")
+        else:
+            return test_result, coverage_result

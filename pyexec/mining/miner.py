@@ -14,7 +14,7 @@ from plumbum.cmd import grep, sed, shuf, wget
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
 from pyexec.mining.gitrequest import GitRequest
 from pyexec.mining.pypirequest import PyPIRequest
-from pyexec.testrunner.runner import AbstractRunner
+from pyexec.testrunner.runner import AbstractRunner, BuildFailedException
 from pyexec.testrunner.runners.pytestrunner import PytestRunner
 from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
@@ -26,7 +26,11 @@ class PackageInfo:
     name: str
     repo_user: Optional[str] = None
     repo_name: Optional[str] = None
+    github_link_from_readthedocs: bool = False
     dockerfile: Optional[Dependencies] = None
+    test_framework_found: bool = False
+    test_image_build: bool = False
+    test_output_parsed = False
     test_result: Optional[TestResult] = None
     test_coverage: Optional[CoverageResult] = None
     has_requirementstxt: bool = False
@@ -43,7 +47,7 @@ class Miner:
             r"(http[s]?://)?(www.)?github.com/([^/]*)/(.*)", re.IGNORECASE
         )
 
-    def mine(self) -> List[PackageInfo]:
+    def mine(self) -> List[PackageInfo]:  # noqa
         self.__logger.info("Starting to mine")
         result: List[PackageInfo] = list()
 
@@ -63,9 +67,10 @@ class Miner:
             if ghpath is None:
                 self.__logger.info("No Github link found for package {}".format(p))
                 continue
-            user, name = ghpath
+            user, name, from_readthedocs = ghpath
             info.repo_user = user
             info.repo_name = name
+            info.github_link_from_readthedocs = from_readthedocs
             gitrequest = GitRequest(user, name, self.__logfile)
 
             try:
@@ -110,12 +115,25 @@ class Miner:
                             tmp, projectdir.name, info.dockerfile, self.__logfile
                         )
                         if runner.is_used_in_project():
-                            testresult, coverage = runner.run()
+                            info.test_framework_found = True
+
+                            try:
+                                info.test_image_build = True
+                                info.test_output_parsed = True
+                                testresult, coverage = runner.run()
+                            except BuildFailedException:
+                                info.test_image_build = False
+                                info.test_output_parsed = False
+                                continue
+                            except ValueError:
+                                info.test_output_parsed = False
+                                continue
 
                             info.test_result = testresult
                             info.test_coverage = coverage
+
             except PermissionError as e:
-                self.__logger.warning("Caught Error: {}".format(e))
+                self.__logger.warning("Caught PermissionError: {}".format(e))
                 continue
                 """ Found Repos on GitHub which have a __pycache__ subdirectory with root permission.
                 Trying to delete such a directory causes a PermissonError.
@@ -136,7 +154,7 @@ class Miner:
 
     def __extract_repository_path(
         self, repo_info: Dict[str, str]
-    ) -> Optional[Tuple[str, str]]:
+    ) -> Optional[Tuple[str, str, bool]]:
         def slash_stripper(string: str) -> str:
             return string.rstrip("/")
 
@@ -145,7 +163,7 @@ class Miner:
             matches = self.__github_regex.match(slash_stripper(repo_info[field]))
             if matches is not None:
                 user, name = matches.group(3), matches.group(4)
-                return user.split("/", 1)[0], name.split("/", 1)[0]
+                return user.split("/", 1)[0], name.split("/", 1)[0], False
 
         for field in fields:
             if "readthedocs" in repo_info[field]:
@@ -161,13 +179,13 @@ class Miner:
                         )
                     if matches is not None:
                         user, name = matches.group(3), matches.group(4)
-                        return user.split("/", 1)[0], name.split("/", 1)[0]
+                        return user.split("/", 1)[0], name.split("/", 1)[0], True
         return None
 
 
 class PyexecMiner:
     def __init__(self, argv: List[str]) -> None:
-        self.__parser = self._create_parser()
+        self.__parser = self.__create_parser()
         if len(argv) == 0:
             self.__parser.format_help()
             sys.exit(0)
@@ -177,11 +195,11 @@ class PyexecMiner:
             self.__package_list = self.__packages_from_file(
                 Path(self.__config.package_list)
             )
-        elif self.__config.num:
-            n = self.__config.num
-            if n <= 0:
-                print("Package count must be >= 1")
-                raise ValueError("Package count must be >= 1")
+        elif self.__config.n:
+            n = self.__str_to_int(self.__config.n)
+            if n is None or n <= 0:
+                print("--random requires a positive integer")
+                sys.exit(0)
             else:
                 self.__package_list = self.__random_pypi_packages(n)
         else:
@@ -190,13 +208,14 @@ class PyexecMiner:
 
     @staticmethod
     def __random_pypi_packages(n: int) -> List[str]:
-        return (
+        cmd = (
             wget["-q", "-O-", "pypi.org/simple"]
             | grep["/simple/"]
             | sed['s|    <a href="/simple/||g']
             | sed["s|/.*||g"]
-            | shuf["-n", n]().splitlines()
+            | shuf["-n", n]
         )
+        return cmd().splitlines()
 
     @staticmethod
     def __packages_from_file(path: Path) -> List[str]:
@@ -223,34 +242,57 @@ class PyexecMiner:
         result = miner.mine()
 
         githubs = 0
+        rtd = 0
         rqs = 0
         setups = 0
         makes = 0
+        framework_found = 0
+        image_build = 0
+        test_output_parsed = 0
+
         for i in result:
             if i.repo_user is not None:
                 githubs = githubs + 1
+            if i.github_link_from_readthedocs:
+                rtd = rtd + 1
             if i.has_requirementstxt:
                 rqs = rqs + 1
             if i.has_setuppy:
                 setups = setups + 1
             if i.has_makefile:
                 makes = makes + 1
+            if i.test_framework_found:
+                framework_found = framework_found + 1
+            if i.test_image_build:
+                image_build = image_build + 1
+            if i.test_output_parsed:
+                test_output_parsed = test_output_parsed + 1
 
         with open(output_dir.joinpath("output.txt"), "w") as f:
             f.write("\n".join(str(e) for e in result))
             f.write(
-                "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\n".format(
-                    len(result), githubs, setups, rqs, makes
+                "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tFrom readthedocs: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\tTests found: {}\n\tDockerimage build: {}\n\tTestoutput parsed: {}\n\n".format(
+                    len(result),
+                    githubs,
+                    rtd,
+                    setups,
+                    rqs,
+                    makes,
+                    framework_found,
+                    image_build,
+                    test_output_parsed,
                 )
             )
 
-        for (c, d) in enumerate(map(lambda r: r.dockerfile, result)):
-            if d is not None:
-                with open(output_dir.joinpath("Dockerfile_{}".format(c)), "w") as f:
-                    f.write(d.to_dockerfile())
+        for r in result:
+            if r.dockerfile is not None:
+                with open(
+                    output_dir.joinpath("Dockerfile_{}".format(r.name)), "w"
+                ) as f:
+                    f.write(r.dockerfile.to_dockerfile())
 
     @staticmethod
-    def _create_parser() -> ArgParser:
+    def __create_parser() -> ArgParser:
         parser = ArgParser()
         miner_source = parser.add_mutually_exclusive_group()
         miner_source.add_argument(
@@ -261,9 +303,16 @@ class PyexecMiner:
             "Each line of this list has to contain one package name on PyPI.",
         )
         miner_source.add_argument(
-            "-r", "--random", dest="num", help="Try mining n random packages from PyPI"
+            "-r", "--random", dest="n", help="Try mining n random packages from PyPI"
         )
         return parser
+
+    @staticmethod
+    def __str_to_int(n: str) -> Optional[int]:
+        try:
+            return int(n)
+        except ValueError:
+            return None
 
 
 def main(argv: List[str]) -> None:

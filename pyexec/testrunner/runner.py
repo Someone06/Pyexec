@@ -6,7 +6,16 @@ from plumbum.cmd import docker, timeout
 
 from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
+from pyexec.util.exceptions import TimeoutException
 from pyexec.util.logging import get_logger
+
+
+class BuildFailedException(Exception):
+    pass
+
+
+class RunnerNotUsedException(Exception):
+    pass
 
 
 class AbstractRunner(ABC):
@@ -32,44 +41,64 @@ class AbstractRunner(ABC):
 
         self._project_path = project_path
         self._dependencies = dependencies
+        self._tag = "pyexec/{}".format(self._project_path.name.lower())
         self._logger = get_logger("Pyexec:AbstractRunner", logfile)
 
     @abstractmethod
-    def run(self) -> Tuple[Optional[TestResult], Optional[CoverageResult]]:
+    def run(self) -> Tuple[TestResult, CoverageResult]:
         raise NotImplementedError("Implement run()")
 
     @abstractmethod
     def is_used_in_project(self) -> bool:
         raise NotImplementedError("Implement is_used_in_project()")
 
-    def _run_container(self, tout: Optional[int] = None) -> Optional[Tuple[str, str]]:
-        tag = "pyexec/{}".format(self._project_path.name.lower())
-        self._logger.debug("Cleaning up previous images")
-        self._remove_image(tag)
+    def _run(self, tout: Optional[int] = None) -> Tuple[str, str]:
+        self.__remove_image()
+        self.__add_dependencies()
+        self.__write_dockerfile()
+        self.__build_image()
+        try:
+            return self.__run_container(tout)
+        finally:
+            self.__remove_image()
 
+    def __add_dependencies(self) -> None:
         self._dependencies.add_copy_command(
             "COPY {} /tmp/{}/".format(self._project_path.name, self._project_path.name)
         )
         self._dependencies.set_workdir_command(
             "WORKDIR /tmp/{}".format(self._project_path.name)
         )
+
+    def __write_dockerfile(self) -> None:
         self._logger.debug("Writing Dockerfile")
         with open(self._project_path.parent.joinpath("Dockerfile"), "w") as f:
             f.write(self._dependencies.to_dockerfile())
 
+    def __build_image(self) -> None:
         self._logger.debug("Building docker image")
-        docker["build", "-t", tag, self._project_path.parent]()
+        _, out, err = docker["build", "-t", self._tag, self._project_path.parent].run(
+            retcode=None
+        )
+        self._logger.debug("Build")
+        self._logger.debug(out)
+        self._logger.debug(err)
+        success = out.splitlines()[-1].startswith("Success")
+        if success:
+            self._logger.debug("Successfully build image")
+        else:
+            self._logger.debug("Error building image")
+            raise BuildFailedException("docker build command failed")
 
-        #        if timeout is not None:
-        #            run_command = timeout[tout, "docker", "run", "--rm", tag]
-        #        else:
-        run_command = docker["run", "--rm", tag]
-
+    def __run_container(self, tout: Optional[int]) -> Tuple[str, str]:
         self._logger.debug("Running container")
+        if tout is not None:
+            run_command = timeout[tout, "docker", "run", "--rm", self._tag]
+        else:
+            run_command = docker["run", "--rm", self._tag]
+
         ret, out, err = run_command.run(retcode=None)
         self._logger.debug("Docker stdout:\n{}Docker stderr:\n{}".format(out, err))
-        self._logger.debug("Container done, removing image")
-        self._remove_image(tag)
         if (
             timeout is not None and ret == 124
         ):  # Timeout was triggered, see 'man timeout'
@@ -78,14 +107,14 @@ class AbstractRunner(ABC):
                     self._project_path.name
                 )
             )
-            return None
+            raise TimeoutException("Timeout during test case execution")
         else:
             self._logger.debug("Successfully run container")
             return out, err
 
-    @staticmethod
-    def _remove_image(tag: str) -> None:
-        _, out, _ = docker["images", "-q", tag].run(retcode=None)
+    def __remove_image(self) -> None:
+        self._logger.debug("Remove docker image")
+        _, out, _ = docker["images", "-q", self._tag].run(retcode=None)
         out = out.strip()
-        if out != "":
+        if not out.startswith("Error"):
             docker["rmi", out].run(retcode=None)
