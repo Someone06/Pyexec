@@ -99,7 +99,6 @@ class AbstractRunner(ABC):
             run_command = docker["run", "--rm", self._tag]
 
         ret, out, err = run_command.run(retcode=None)
-        self._logger.debug("Docker stdout:\n{}Docker stderr:\n{}".format(out, err))
         if (
             timeout is not None and ret == 124
         ):  # Timeout was triggered, see 'man timeout'

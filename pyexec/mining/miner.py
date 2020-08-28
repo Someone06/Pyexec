@@ -246,6 +246,7 @@ class PyexecMiner:
         rqs = 0
         setups = 0
         makes = 0
+        dockerfile = 0
         framework_found = 0
         image_build = 0
         test_output_parsed = 0
@@ -261,6 +262,8 @@ class PyexecMiner:
                 setups = setups + 1
             if i.has_makefile:
                 makes = makes + 1
+            if i.dockerfile is not None:
+                dockerfile = dockerfile + 1
             if i.test_framework_found:
                 framework_found = framework_found + 1
             if i.test_image_build:
@@ -271,13 +274,14 @@ class PyexecMiner:
         with open(output_dir.joinpath("output.txt"), "w") as f:
             f.write("\n".join(str(e) for e in result))
             f.write(
-                "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tFrom readthedocs: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\tTests found: {}\n\tDockerimage build: {}\n\tTestoutput parsed: {}\n\n".format(
+                "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tFrom readthedocs: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\tDockerfiles inferred: {}\n\tTests found: {}\n\tDockerimage build: {}\n\tTestoutput parsed: {}\n\n".format(
                     len(result),
                     githubs,
                     rtd,
                     setups,
                     rqs,
                     makes,
+                    dockerfile,
                     framework_found,
                     image_build,
                     test_output_parsed,
