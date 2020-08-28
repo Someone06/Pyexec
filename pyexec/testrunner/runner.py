@@ -63,6 +63,9 @@ class AbstractRunner(ABC):
             self.__remove_image()
 
     def __add_dependencies(self) -> None:
+        self._dependencies.push_run_command(
+            r'RUN ["python", "-m", "pip", "install", "--upgrade", "pip"]'
+        )
         self._dependencies.add_copy_command(
             "COPY {} /tmp/{}/".format(self._project_path.name, self._project_path.name)
         )
@@ -81,8 +84,6 @@ class AbstractRunner(ABC):
             retcode=None
         )
         self._logger.debug("Build")
-        self._logger.debug(out)
-        self._logger.debug(err)
         success = out.splitlines()[-1].startswith("Success")
         if success:
             self._logger.debug("Successfully build image")

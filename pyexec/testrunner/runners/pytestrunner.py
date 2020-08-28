@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from plumbum.cmd import grep
+from setuptools import find_packages
 
 from pyexec.testrunner.runner import AbstractRunner, RunnerNotUsedException
 from pyexec.testrunner.runresult import CoverageResult, TestResult
@@ -31,10 +32,10 @@ class PytestRunner(AbstractRunner):
     def _add_dependencies(self) -> None:
         self._logger.debug("Adding dependencies")
         self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest"]')
-        self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest-cov"]')
+        self._dependencies.add_run_command(r'RUN ["pip", "install", "coverage"]')
         self._dependencies.set_cmd_command(
-            r'CMD ["python", "-m", "pytest", "-r", "--cov={}", "-report=term-missing"]'.format(
-                self._project_path.name
+            r"""CMD ["sh", "-c", "coverage run --source={} -m pytest -rA --tb=no -report=term-missing ; coverage json --pretty-print -o- | sed '/totals/,$!d' | head -n -1"]""".format(
+                ",".join(find_packages(where=self._project_path))
             )
         )
 
@@ -63,63 +64,73 @@ class PytestRunner(AbstractRunner):
         test_result = None
         coverage_result = None
 
+        #  Example:
+        #  === 6 failed, 5 passed, 2 skipped, 1 xfailed, 1 xpassed, 2 warnings in 2.49s ===
         matches = re.search(
-            r"[=]+ (([0-9]+) failed, )?"
+            r"=== (([0-9]+) failed, )?"
             r"([0-9]+) passed"
             r"(, ([0-9]+) skipped)?"
+            r"(, ([0-9]+) xfailed)?"
+            r"(, ([0-9]+) xpassed)?"
             r"(, ([0-9]+) warnings)?"
             r"(, ([0-9]+) error)?"
-            r" in ([0-9.]+) seconds",
+            r" in ([0-9.]+)s ===\s*",
             log,
         )
         if matches:
+            self._logger.debug("Matched test results")
             failed = int(matches.group(2)) if matches.group(2) else 0
             passed = int(matches.group(3)) if matches.group(3) else 0
             skipped = int(matches.group(5)) if matches.group(5) else 0
-            warnings = int(matches.group(7)) if matches.group(7) else 0
-            error = int(matches.group(9)) if matches.group(9) else 0
-            time = float(matches.group(10)) if matches.group(10) else 0.0
+            xfailed = int(matches.group(7)) if matches.group(7) else 0
+            xpassed = int(matches.group(9)) if matches.group(9) else 0
+            warnings = int(matches.group(11)) if matches.group(11) else 0
+            error = int(matches.group(13)) if matches.group(13) else 0
+            time = float(matches.group(14)) if matches.group(14) else 0.0
+
             test_result = TestResult(
                 failed=failed,
                 passed=passed,
                 skipped=skipped,
+                xfailed=xfailed,
+                xpassed=xpassed,
                 warnings=warnings,
                 error=error,
                 time=time,
             )
 
+        # Example (without the #'s):
+        #    "totals": {
+        #        "covered_lines": 0,
+        #        "num_statements": 234,
+        #        "percent_covered": 0.0,
+        #        "missing_lines": 234,
+        #        "excluded_lines": 0
+        #    }
         matches = re.search(
-            r"TOTAL\s+"
-            r"([0-9]+)\s+"
-            r"([0-9]+)\s+"
-            r"(([0-9]+)\s(+([0-9]+)\s+)?"
-            r"([0-9]+%)",
+            r'\s*"totals": \{\s*'
+            r'\s*"covered_lines": (\d+),\s*'
+            r'\s*"num_statements": (\d+),\s*'
+            r'\s*"percent_covered": (\d+)\.(\d+),\s*'
+            r'\s*"missing_lines": (\d+),\s*'
+            r'\s*"excluded_lines": (\d+)\s*',
             log,
         )
         if matches:
-            statements = int(matches.group(1)) if matches.group(1) else 0
-            missing = int(matches.group(2)) if matches.group(2) else 0
-            coverage = float(matches.group(6)[:-1]) if matches.group(6) else 0.0
-            coverage_result = CoverageResult(
-                statements=statements, missing=missing, coverage=coverage
-            )
+            self._logger.debug("Matched coverage")
+            covered_lines = int(matches.group(1))
+            num_statements = int(matches.group(2))
+            percent_covered = float(matches.group(3) + "." + matches.group(4))
+            missing_lines = int(matches.group(5))
+            excluded_lines = int(matches.group(6))
 
-        else:
-            matches = re.search(
-                r".py\s+"
-                r"([0-9]+)\s+"
-                r"([0-9]+)\s+"
-                r"(([0-9]+)\s+([0-9]+)\s+)?"
-                r"([0-9]+%)",
-                log,
+            coverage_result = CoverageResult(
+                covered_lines,
+                num_statements,
+                percent_covered,
+                missing_lines,
+                excluded_lines,
             )
-            if matches:
-                statements = int(matches.group(1)) if matches.group(1) else 0
-                missing = int(matches.group(2)) if matches.group(2) else 0
-                coverage = float(matches.group(6)[:-1]) if matches.group(6) else 0.0
-                coverage_result = CoverageResult(
-                    statements=statements, missing=missing, coverage=coverage
-                )
 
         if test_result is None or coverage_result is None:
             self._logger.debug("Unexpected output format of pytest and pytest-cov")

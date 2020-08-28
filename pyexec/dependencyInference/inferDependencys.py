@@ -153,6 +153,8 @@ class InferDockerfile:
                 self.__project_path,
                 "--environment",
                 "PYTHONPATH={}".format(self.__python_path),
+                "--exclude",
+                self.__project_path.name.lower(),
                 file_path,
             ]
         else:
@@ -162,6 +164,8 @@ class InferDockerfile:
                 self.__project_path,
                 "--environment",
                 "PYTHONPATH={}".format(self.__python_path),
+                "--exclude",
+                self.__project_path.name.lower(),
                 file_path,
             ]
 

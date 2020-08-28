@@ -116,6 +116,12 @@ class Dependencies:
         else:
             self.__run_commands.append(clause)
 
+    def push_run_command(self, clause: str) -> None:
+        if not Dependencies.__full_match(clause, self.__run_regex):
+            raise Dependencies.InvalidFormatException("Argument is no valid RUN clause")
+        else:
+            self.__run_commands.insert(0, clause)
+
     def add_copy_command(self, clause: str) -> None:
         if not Dependencies.__full_match(clause, self.__copy_regex):
             raise Dependencies.InvalidFormatException(
