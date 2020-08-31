@@ -47,110 +47,129 @@ class Miner:
             r"(http[s]?://)?(www.)?github.com/([^/]*)/(.*)", re.IGNORECASE
         )
 
-    def mine(self) -> List[PackageInfo]:  # noqa
+    def mine(self) -> List[PackageInfo]:
         self.__logger.info("Starting to mine")
         result: List[PackageInfo] = list()
 
-        for p in self.__packages:
-            self.__logger.info("Mining package {}".format(p))
-            info = PackageInfo(name=p)
-            result.append(info)
-            pypirequest = PyPIRequest(p, self.__logfile)
-            pypi_info = pypirequest.get_result_from_url()
-            if pypi_info is None:
-                self.__logger.warning(
-                    "No PyPI information found for package {}".format(p)
-                )
-                continue
+        try:
+            with TemporaryDirectory(prefix="pyexec-cache-") as d:
+                tmpdir = Path(d)
 
-            ghpath = self.__extract_repository_path(pypi_info)
-            if ghpath is None:
-                self.__logger.info("No Github link found for package {}".format(p))
-                continue
-            user, name, from_readthedocs = ghpath
-            info.repo_user = user
-            info.repo_name = name
-            info.github_link_from_readthedocs = from_readthedocs
-            gitrequest = GitRequest(user, name, self.__logfile)
-
-            try:
-                with TemporaryDirectory() as directory:
-                    tmp = Path(directory)
+                for count, p in enumerate(self.__packages):
                     try:
-                        gitrequest.grab(tmp)
-                    except GitRequest.GitRepoNotFoundException:
                         self.__logger.info(
-                            "Cound not clone package {} from GitHub".format(p)
-                        )
-                        continue
-                    tmp_content = list(tmp.iterdir())
-                    if len(tmp_content) != 1:
-                        self.__logger.error(
-                            "Check out of repository for packages {} did not work".format(
-                                p
+                            "Mining package {} (Number {} of  {})".format(
+                                p, count + 1, len(self.__packages)
                             )
                         )
-                        continue
-                    projectdir = tmp_content[0]
-                    info.has_requirementstxt = projectdir.joinpath(
-                        "requirements.txt"
-                    ).exists()
-                    info.has_makefile = projectdir.joinpath("Makefile").exists()
-                    info.has_setuppy = projectdir.joinpath("setup.py").exists()
+                        info = PackageInfo(name=p)
+                        result.append(info)
+                        pypirequest = PyPIRequest(p, self.__logfile)
+                        pypi_info = pypirequest.get_result_from_url()
+                        if pypi_info is None:
+                            self.__logger.warning(
+                                "No PyPI information found for package {}".format(p)
+                            )
+                            continue
 
-                    inferdockerfile = InferDockerfile(projectdir, self.__logfile)
-                    try:
-                        info.dockerfile = inferdockerfile.infer_dockerfile()
-                    except InferDockerfile.NoEnvironmentFoundException:
+                        ghpath = self.__extract_repository_path(pypi_info)
+                        if ghpath is None:
+                            self.__logger.info(
+                                "No Github link found for package {}".format(p)
+                            )
+                            continue
+                        (
+                            info.repo_user,
+                            info.repo_name,
+                            info.github_link_from_readthedocs,
+                        ) = ghpath
+                        gitrequest = GitRequest(
+                            info.repo_user, info.repo_name, self.__logfile
+                        )
+                        self.__checkout(tmpdir, gitrequest, info)
+                    except KeyboardInterrupt:
                         self.__logger.info(
-                            "No environment found for package {}".format(p)
+                            "Caught keyboard interrupt. Stopped mining. Returning already mined results"
                         )
+                        break
+                    except Exception as e:
+                        self.__logger.error("Caught unknown exception: {}".format(e))
                         continue
-                    except InferDockerfile.TimeoutException:
-                        self.__logger.info("v2 timed out on package {}".format(p))
-                        continue
-
-                    if info.dockerfile is not None:
-                        runner: AbstractRunner = PytestRunner(
-                            tmp, projectdir.name, info.dockerfile, self.__logfile
-                        )
-                        if runner.is_used_in_project():
-                            info.test_framework_found = True
-
-                            try:
-                                info.test_image_build = True
-                                info.test_output_parsed = True
-                                testresult, coverage = runner.run()
-                            except BuildFailedException:
-                                info.test_image_build = False
-                                info.test_output_parsed = False
-                                continue
-                            except ValueError:
-                                info.test_output_parsed = False
-                                continue
-
-                            info.test_result = testresult
-                            info.test_coverage = coverage
-
-            except PermissionError as e:
-                self.__logger.warning("Caught PermissionError: {}".format(e))
-                continue
-                """ Found Repos on GitHub which have a __pycache__ subdirectory with root permission.
-                Trying to delete such a directory causes a PermissonError.
-                The temporary directories are placed in /tmp so they will be eventually cleaned up when
-                shutting down the computer.
-                Note: Creating a temporary directory in the (user owned) home folder does not solve
-                this problem.
-            """
-            except KeyboardInterrupt:
-                print(
-                    "Caught keyboard interrupt. Stopped mining. Returning already mined results"
+        except PermissionError:
+            self.__logger.error(
+                "Could not delete temporary directory {}. Requires root permission. Please do this cleanup manually!".format(
+                    tmpdir
                 )
-                return result
-            except Exception as e:
-                self.__logger.warning("Caught unknown excption: {}".format(e))
-                continue
+            )
         return result
+
+    def __checkout(self, basedir: Path, request: GitRequest, info: PackageInfo):
+        try:
+            with TemporaryDirectory(dir=basedir) as d:
+                tmpdir = Path(d)
+                try:
+                    request.grab(tmpdir)
+                except GitRequest.GitRepoNotFoundException:
+                    self.__logger.info(
+                        "Cound not clone package {} from GitHub".format(info.name)
+                    )
+                    return
+                tmp_content = list(tmpdir.iterdir())
+                if len(tmp_content) != 1:
+                    self.__logger.error(
+                        "Check out of repository for packages {} did not work".format(
+                            info.name
+                        )
+                    )
+                    return
+                projectdir = tmp_content[0]
+                info.has_requirementstxt = projectdir.joinpath(
+                    "requirements.txt"
+                ).exists()
+                info.has_makefile = projectdir.joinpath("Makefile").exists()
+                info.has_setuppy = projectdir.joinpath("setup.py").exists()
+
+                inferdockerfile = InferDockerfile(projectdir, self.__logfile)
+                try:
+                    info.dockerfile = inferdockerfile.infer_dockerfile()
+                except InferDockerfile.NoEnvironmentFoundException:
+                    self.__logger.info(
+                        "No environment found for package {}".format(info.name)
+                    )
+                    return
+                except InferDockerfile.TimeoutException:
+                    self.__logger.info("v2 timed out on package {}".format(info.name))
+                    return
+
+                if info.dockerfile is not None:
+                    runner: AbstractRunner = PytestRunner(
+                        tmpdir, projectdir.name, info.dockerfile, self.__logfile
+                    )
+                    if runner.is_used_in_project():
+                        info.test_framework_found = True
+
+                        try:
+                            info.test_image_build = True
+                            info.test_output_parsed = True
+                            info.test_result, info.test_coverage = runner.run()
+                        except BuildFailedException:
+                            info.test_image_build = False
+                            info.test_output_parsed = False
+                            return
+                        except ValueError:
+                            info.test_output_parsed = False
+                            return
+
+        except PermissionError:
+            return
+            """
+            Found repositories on GitHub which have a __pycache__ sub-directory with root permission.
+            Trying to delete such a directory causes a PermissonError.
+            The temporary directories are placed in $TMPDIR, which defaults to /tmp so they will
+            be eventually cleaned up when shutting down the computer.
+            Note: Creating a temporary directory in the (user owned) home folder does not solve
+            this problem.
+            """
 
     def __extract_repository_path(
         self, repo_info: Dict[str, str]
