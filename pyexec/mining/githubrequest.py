@@ -1,12 +1,22 @@
 import time
+from dataclasses import dataclass
 from datetime import datetime
-from logging import Logger
+from pathlib import Path
 from typing import Any, Dict, Optional
 
-from gitgub.RateLimit import RateLimit
-from gitgub.Repository import Repository
 from github.MainClass import Github
 from github.Rate import Rate
+from github.RateLimit import RateLimit
+from github.Repository import Repository
+
+from pyexec.util.logging import get_logger
+
+
+@dataclass
+class GitHubInfo:
+    python_version: str
+    created_at: datetime
+    last_updated: datetime
 
 
 class GitHubRequest:
@@ -22,24 +32,29 @@ class GitHubRequest:
         access_token: str,
         repo_user: str,
         repo_name: str,
-        logger: Optional[Logger] = None,
+        logfile: Optional[Path] = None,
     ) -> None:
-        self.__logger = logger
+        self.__logger = get_logger("Pyexec:GitHubRequest", logfile)
         self.__github = Github(login_or_token=access_token, user_agent="pyexec")
         self.wait_if_necessary()
         self.__repo: Repository = self.__github.get_repo(
             "{}/{}".format(repo_user, repo_name)
         )
 
+    def get_github_info(self) -> GitHubInfo:
+        return GitHubInfo(
+            python_version=self.get_language(),
+            created_at=self.get_created_at(),
+            last_updated=self.get_updated_at(),
+        )
+
     def wait_if_necessary(self) -> None:
         """Wait for the GitHub API to accept new requests, if necessary."""
 
         def wait(seconds: int) -> None:
-            if self.__logger is not None:
-                self.__logger.info("Wait for %d seconds for GitHub API", seconds)
+            self.__logger.info("Wait for %d seconds for GitHub API", seconds)
             time.sleep(seconds)
-            if self.__logger is not None:
-                self.__logger.info("Done waiting")
+            self.__logger.info("Done waiting")
 
         rate_limit: RateLimit = self.__github.get_rate_limit()
         rate: Rate = rate_limit.core
@@ -138,14 +153,15 @@ class GitHubRequest:
         self.wait_if_necessary()
         return self.__repo.created_at
 
-    def get_last_modified(self) -> datetime:
         """
+    def get_last_modified(self) -> datetime:
         Returns the time stamp the repository was last modified at.
 
         :return: The time stamp the repository was last modified at.
-        """
         self.wait_if_necessary()
+        if self.__
         return datetime.strptime(self.__repo.last_modified, "%a, %d %b %Y %H:%M:%S %Z")
+        """
 
     def get_open_issues_count(self) -> int:
         """

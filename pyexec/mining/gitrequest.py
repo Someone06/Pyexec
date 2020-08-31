@@ -9,11 +9,20 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import git
 from git import Blob, Commit, Repo, TagObject, Tree
-from plumbum import local
+from plumbum.cmd import awk, cloc, grep, radon, tail, tr
 from pydriller import RepositoryMining
 from pydriller.domain.commit import Modification
 
 from pyexec.util.logging import get_logger
+
+
+@dataclass
+class RepoInfo:
+    has_requirementstxt: bool
+    has_setuppy: bool
+    has_makefile: bool
+    loc: int
+    average_complexity: int
 
 
 @dataclass
@@ -32,6 +41,13 @@ class GitRequest:
     class GitRepoNotFoundException(Exception):
         pass
 
+    __close_regex = re.compile(
+        r"(close([sd])?|fix(es|ed)?|resolve([sd])?)\s+#(\d+)", re.IGNORECASE
+    )
+    __bugfix_regex = re.compile(
+        r"(error|fix|issue|mistake|incorrect|fault|detect|flaw)", re.IGNORECASE
+    )
+
     def __init__(
         self, repo_user: str, repo_name: str, logfile: Optional[Path] = None
     ) -> None:
@@ -40,13 +56,6 @@ class GitRequest:
         self.__logger = get_logger("Pyexec::GitRequest", logfile)
 
         self.__commits: Dict[str, Dict[str, Any]] = dict()
-        self.__close_regex = re.compile(
-            r"(close([sd])?|fix(es|ed)?|resolve([sd])?)\s+#(\d+)", re.IGNORECASE
-        )
-        self.__bugfix_regex = re.compile(
-            r"(error|fix|issue|mistake|incorrect|fault|detect|flaw)", re.IGNORECASE
-        )
-
         self.__num_lines = -1
         self.__num_files = -1
         self.__num_commits = -1
@@ -54,16 +63,11 @@ class GitRequest:
         self.__test_frameworks: Optional[Set[str]] = None
         self.__test_run_results = None
         self.__type_annotations: Set[str] = set()
+        self.__has_setuppy = False
+        self.__has_requiremetnstxt = False
+        self.__hasmakefile = False
 
-    #    def grab(self, tmp_dir: str, testing: bool = False) -> Dict[str, RepositoryCommit]:
-    def grab(self, tmp_dir: Path, testing: bool = False) -> None:
-        """
-        Mine the data from the checked-out repository.
-
-        :param tmp_dir: A path, where the repository will be checked out to.
-        :param testing: Indicates whether we are in testing mode or not.
-        :return: A mapping of results.
-        """
+    def grab(self, tmp_dir: Path, testing: bool = False) -> RepoInfo:
         path = tmp_dir.joinpath(self.__repo_name)
         if testing:
             url = "https://github.com/{}/{}".format(self.__repo_user, self.__repo_name)
@@ -76,7 +80,6 @@ class GitRequest:
             self.__logger.info("GitHub repository {} is not accessible".format(url))
             raise GitRequest.GitRepoNotFoundException("{} is inaccessible".format(url))
 
-        """
         repo_mining = RepositoryMining(path)
         self.__num_commits, commits = self.__find_flaw_referencing_commits(repo_mining)
         issue_ids = self.__extract_issue_ids(commits)
@@ -89,8 +92,30 @@ class GitRequest:
         self.__test_frameworks = self.__detect_test_frameworks(path)
         #        self._test_run_results = self._extract_test_run_results(path)
         self.__type_annotations = self.__detect_type_annotations(path)
-        return commits
-        """
+        self.__has_setuppy = path.joinpath("setup.yp").exists()
+        self.__has_requirementstxt = path.joinpath("requirements.txt").exists()
+        self.__has_makefile = path.joinpath("Makefile").exists()
+        return RepoInfo(
+            has_requirementstxt=self.__has_requirementstxt,
+            has_setuppy=self.__has_setuppy,
+            has_makefile=self.__has_makefile,
+            loc=self.__num_lines,
+            average_complexity=self.__average_complexity(path),
+        )
+
+    def __average_complexity(self, project_dir: Path) -> int:
+        cmd = (
+            radon["cc", "-a", project_dir]
+            | tail["-n", 1]
+            | awk["{print $4}"]
+            | tr["-d", r"'()'"]
+        )
+        _, out, _ = cmd.run(retcode=None)
+        try:
+            return round(float(out))
+        except ValueError:
+            self.__logger.error("Error computing average cyclomatic complexity")
+            return -1
 
     @property
     def num_lines(self) -> int:
@@ -115,6 +140,18 @@ class GitRequest:
     @property
     def type_annotations(self) -> Set[str]:
         return self.__type_annotations
+
+    @property
+    def has_setuppy(self) -> bool:
+        return self.__has_setuppy
+
+    @property
+    def has_requirementstxt(self) -> bool:
+        return self.__has_requirementstxt
+
+    @property
+    def has_makefile(self) -> bool:
+        return self.__has_makefile
 
     """
     @property
@@ -190,11 +227,7 @@ class GitRequest:
         return commits
 
     @staticmethod
-    def __get_cloc_stats(path: Union[bytes, str]) -> Optional[Tuple[int, int]]:
-        cloc = local["cloc"]
-        if cloc is None:
-            return None
-        grep = local["grep"]
+    def __get_cloc_stats(path: Path) -> Optional[Tuple[int, int]]:
         chain = cloc["--include-lang=Python", "--quiet", path] | grep["Python"]
         _, result, _ = chain.run(retcode=None)
         if result is not None:
@@ -207,8 +240,7 @@ class GitRequest:
         return None
 
     @staticmethod
-    def __detect_type_annotations(path: str) -> Set[str]:
-        grep = local["grep"]
+    def __detect_type_annotations(path: Path) -> Set[str]:
         type_annotations = set()
 
         # Check whether there exist *.pyi files
@@ -227,9 +259,8 @@ class GitRequest:
         return type_annotations
 
     # flake8: noqa: C901
-    def __detect_test_frameworks(self, path: Union[bytes, str]) -> Optional[Set[str]]:
+    def __detect_test_frameworks(self, path: Path) -> Optional[Set[str]]:
         self.__logger.debug("Searching for test framework")
-        grep = local["grep"]
         frameworks = set()
 
         # Check for stdlib unittest framework

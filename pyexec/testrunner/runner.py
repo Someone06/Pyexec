@@ -52,6 +52,10 @@ class AbstractRunner(ABC):
     def is_used_in_project(self) -> bool:
         raise NotImplementedError("Implement is_used_in_project()")
 
+    @abstractmethod
+    def get_test_count(self) -> int:
+        raise NotImplementedError("Implement get_test_count()")
+
     def _run(self, tout: Optional[int] = None) -> Tuple[str, str]:
         self.__remove_image()
         self.__add_dependencies()

@@ -21,6 +21,7 @@ gitpython = "*"
 pydriller = "*"
 plumbum = "*"
 configargparse = "*"
+radon = "*"
 
 [requires]
 python_version = "3.8"

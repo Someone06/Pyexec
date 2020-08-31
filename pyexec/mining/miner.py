@@ -12,7 +12,8 @@ from configargparse import ArgParser
 from plumbum.cmd import grep, sed, shuf, wget
 
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
-from pyexec.mining.gitrequest import GitRequest
+from pyexec.mining.gihubtrequest import GitHubInfo, GitHubRequest
+from pyexec.mining.gitrequest import GitRequest, RepoInfo
 from pyexec.mining.pypirequest import PyPIRequest
 from pyexec.testrunner.runner import AbstractRunner, BuildFailedException
 from pyexec.testrunner.runners.pytestrunner import PytestRunner
@@ -24,23 +25,32 @@ from pyexec.util.logging import get_logger
 @dataclass
 class PackageInfo:
     name: str
-    repo_user: Optional[str] = None
-    repo_name: Optional[str] = None
-    github_link_from_readthedocs: bool = False
+    github_repo: Optional[Tuple[str, str]] = None
     dockerfile: Optional[Dependencies] = None
-    test_framework_found: bool = False
-    test_image_build: bool = False
-    test_output_parsed = False
-    test_result: Optional[TestResult] = None
-    test_coverage: Optional[CoverageResult] = None
-    has_requirementstxt: bool = False
-    has_setuppy: bool = False
-    has_makefile: bool = False
+    dockerimage_build: bool = False
+    testcase_count: int = 0
+    test_result: Optional[Tuple[TestResult, CoverageResult]] = None
+    github_info: Optional[GitHubInfo] = None
+    repo_info: Optional[RepoInfo] = None
+
+    @property
+    def has_github_repository(self) -> bool:
+        return self.github_info is not None
+
+    @property
+    def test_executed(self) -> bool:
+        return self.test_result is not None
 
 
 class Miner:
-    def __init__(self, packages: List[str], logfile: Optional[Path] = None):
+    def __init__(
+        self,
+        packages: List[str],
+        github_token: Optional[str],
+        logfile: Optional[Path] = None,
+    ):
         self.__packages = packages
+        self.__github_token = github_token
         self.__logfile = logfile
         self.__logger = get_logger("Pyexec::Miner", logfile)
         self.__github_regex = re.compile(
@@ -72,19 +82,23 @@ class Miner:
                             )
                             continue
 
-                        ghpath = self.__extract_repository_path(pypi_info)
-                        if ghpath is None:
+                        info.github_repo = self.__extract_repository_path(pypi_info)
+                        if info.github_repo is None:
                             self.__logger.info(
                                 "No Github link found for package {}".format(p)
                             )
                             continue
-                        (
-                            info.repo_user,
-                            info.repo_name,
-                            info.github_link_from_readthedocs,
-                        ) = ghpath
+
+                        if self.__github_token is not None:
+                            github_request = GitHubRequest(
+                                self.__github_token,
+                                info.github_repo[0],
+                                info.github_repo[1],
+                                self.__logfile,
+                            )
+                            info.github_info = github_request.get_github_info()
                         gitrequest = GitRequest(
-                            info.repo_user, info.repo_name, self.__logfile
+                            info.github_repo[0], info.github_repo[1], self.__logfile
                         )
                         self.__checkout(tmpdir, gitrequest, info)
                     except KeyboardInterrupt:
@@ -108,7 +122,7 @@ class Miner:
             with TemporaryDirectory(dir=basedir) as d:
                 tmpdir = Path(d)
                 try:
-                    request.grab(tmpdir)
+                    info.repo_info = request.grab(tmpdir)
                 except GitRequest.GitRepoNotFoundException:
                     self.__logger.info(
                         "Cound not clone package {} from GitHub".format(info.name)
@@ -123,11 +137,6 @@ class Miner:
                     )
                     return
                 projectdir = tmp_content[0]
-                info.has_requirementstxt = projectdir.joinpath(
-                    "requirements.txt"
-                ).exists()
-                info.has_makefile = projectdir.joinpath("Makefile").exists()
-                info.has_setuppy = projectdir.joinpath("setup.py").exists()
 
                 inferdockerfile = InferDockerfile(projectdir, self.__logfile)
                 try:
@@ -146,22 +155,19 @@ class Miner:
                         tmpdir, projectdir.name, info.dockerfile, self.__logfile
                     )
                     if runner.is_used_in_project():
-                        info.test_framework_found = True
-
+                        info.testcase_count = runner.get_test_count()
                         try:
-                            info.test_image_build = True
-                            info.test_output_parsed = True
-                            info.test_result, info.test_coverage = runner.run()
+                            info.dockerimage_build = True
+                            info.test_result = runner.run()
                         except BuildFailedException:
-                            info.test_image_build = False
-                            info.test_output_parsed = False
-                            return
+                            info.dockerimage_build = False
                         except ValueError:
-                            info.test_output_parsed = False
-                            return
+                            self.__logger.error(
+                                "Cound not parse test execution results"
+                            )
 
         except PermissionError:
-            return
+            pass
             """
             Found repositories on GitHub which have a __pycache__ sub-directory with root permission.
             Trying to delete such a directory causes a PermissonError.
@@ -173,7 +179,7 @@ class Miner:
 
     def __extract_repository_path(
         self, repo_info: Dict[str, str]
-    ) -> Optional[Tuple[str, str, bool]]:
+    ) -> Optional[Tuple[str, str]]:
         def slash_stripper(string: str) -> str:
             return string.rstrip("/")
 
@@ -182,7 +188,7 @@ class Miner:
             matches = self.__github_regex.match(slash_stripper(repo_info[field]))
             if matches is not None:
                 user, name = matches.group(3), matches.group(4)
-                return user.split("/", 1)[0], name.split("/", 1)[0], False
+                return user.split("/", 1)[0], name.split("/", 1)[0]
 
         for field in fields:
             if "readthedocs" in repo_info[field]:
@@ -198,7 +204,7 @@ class Miner:
                         )
                     if matches is not None:
                         user, name = matches.group(3), matches.group(4)
-                        return user.split("/", 1)[0], name.split("/", 1)[0], True
+                        return user.split("/", 1)[0], name.split("/", 1)[0]
         return None
 
 
@@ -210,6 +216,8 @@ class PyexecMiner:
             sys.exit(0)
 
         self.__config = self.__parser.parse_args(argv[1:])
+        self.__github_token: Optional[str] = self.__config.github_token
+
         if self.__config.package_list is not None:
             self.__package_list = self.__packages_from_file(
                 Path(self.__config.package_list)
@@ -257,55 +265,13 @@ class PyexecMiner:
 
     def mine(self) -> None:
         output_dir = self.__create_output_dir()
-        miner = Miner(self.__package_list, output_dir.joinpath("log.txt"))
+        miner = Miner(
+            self.__package_list, self.__github_token, output_dir.joinpath("log.txt")
+        )
         result = miner.mine()
-
-        githubs = 0
-        rtd = 0
-        rqs = 0
-        setups = 0
-        makes = 0
-        dockerfile = 0
-        framework_found = 0
-        image_build = 0
-        test_output_parsed = 0
-
-        for i in result:
-            if i.repo_user is not None:
-                githubs = githubs + 1
-            if i.github_link_from_readthedocs:
-                rtd = rtd + 1
-            if i.has_requirementstxt:
-                rqs = rqs + 1
-            if i.has_setuppy:
-                setups = setups + 1
-            if i.has_makefile:
-                makes = makes + 1
-            if i.dockerfile is not None:
-                dockerfile = dockerfile + 1
-            if i.test_framework_found:
-                framework_found = framework_found + 1
-            if i.test_image_build:
-                image_build = image_build + 1
-            if i.test_output_parsed:
-                test_output_parsed = test_output_parsed + 1
 
         with open(output_dir.joinpath("output.txt"), "w") as f:
             f.write("\n".join(str(e) for e in result))
-            f.write(
-                "\n\n\nStats:\n\tTotal packages: {}\n\tGitHub Repos: {}\n\tFrom readthedocs: {}\n\tsetup.py: {}\n\trequirements.txt: {}\n\tMakefile: {}\n\tDockerfiles inferred: {}\n\tTests found: {}\n\tDockerimage build: {}\n\tTestoutput parsed: {}\n\n".format(
-                    len(result),
-                    githubs,
-                    rtd,
-                    setups,
-                    rqs,
-                    makes,
-                    dockerfile,
-                    framework_found,
-                    image_build,
-                    test_output_parsed,
-                )
-            )
 
         for r in result:
             if r.dockerfile is not None:
@@ -327,6 +293,12 @@ class PyexecMiner:
         )
         miner_source.add_argument(
             "-r", "--random", dest="n", help="Try mining n random packages from PyPI"
+        )
+        parser.add_optional(
+            "-t",
+            "--github-token",
+            dest="github_token",
+            help="A GitHub token for mining data from GitHub",
         )
         return parser
 
