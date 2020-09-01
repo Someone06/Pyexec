@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from github.GithubException import GithubException
 from github.MainClass import Github
 from github.Rate import Rate
 from github.RateLimit import RateLimit
@@ -17,6 +18,10 @@ class GitHubInfo:
     python_version: str
     created_at: datetime
     last_updated: datetime
+
+
+class GitHubRequestException(Exception):
+    pass
 
 
 class GitHubRequest:
@@ -35,13 +40,24 @@ class GitHubRequest:
         logfile: Optional[Path] = None,
     ) -> None:
         self.__logger = get_logger("Pyexec:GitHubRequest", logfile)
-        self.__github = Github(login_or_token=access_token, user_agent="pyexec")
+        self.__github = Github(access_token)
         self.wait_if_necessary()
-        self.__repo: Repository = self.__github.get_repo(
-            "{}/{}".format(repo_user, repo_name)
-        )
+        try:
+            self.__repo: Repository = self.__github.get_repo(
+                "{}/{}".format(repo_user, repo_name)
+            )
+        except GithubException:
+            self.__logger.info(
+                "Cannot access repository {}/{}. Is not publicly accessible or was deleted".format(
+                    repo_user, repo_name
+                )
+            )
+            raise GitHubRequestException(
+                "Cannot access repository {}/{}".format(repo_user, repo_name)
+            )
 
     def get_github_info(self) -> GitHubInfo:
+        self.__logger.debug("Getting GitHubInfo")
         return GitHubInfo(
             python_version=self.get_language(),
             created_at=self.get_created_at(),

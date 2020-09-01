@@ -80,21 +80,22 @@ class GitRequest:
             self.__logger.info("GitHub repository {} is not accessible".format(url))
             raise GitRequest.GitRepoNotFoundException("{} is inaccessible".format(url))
 
-        repo_mining = RepositoryMining(path)
+        repo_mining = RepositoryMining(str(path))
         self.__num_commits, commits = self.__find_flaw_referencing_commits(repo_mining)
-        issue_ids = self.__extract_issue_ids(commits)
-        commits = self.__add_issue_ids_to_commits(issue_ids, commits)
+        # issue_ids = self.__extract_issue_ids(commits)
+        # commits = self.__add_issue_ids_to_commits(issue_ids, commits)
 
         cloc_stats = self.__get_cloc_stats(path)
         if cloc_stats is not None and len(cloc_stats) == 2:
             self.__num_files, self.__num_lines = cloc_stats
-        self.__head_commit = repo.head.commit
-        self.__test_frameworks = self.__detect_test_frameworks(path)
+        # self.__head_commit = repo.head.commit
+        # self.__test_frameworks = self.__detect_test_frameworks(path)
         #        self._test_run_results = self._extract_test_run_results(path)
-        self.__type_annotations = self.__detect_type_annotations(path)
+        # self.__type_annotations = self.__detect_type_annotations(path)
         self.__has_setuppy = path.joinpath("setup.yp").exists()
         self.__has_requirementstxt = path.joinpath("requirements.txt").exists()
         self.__has_makefile = path.joinpath("Makefile").exists()
+
         return RepoInfo(
             has_requirementstxt=self.__has_requirementstxt,
             has_setuppy=self.__has_setuppy,

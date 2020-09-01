@@ -12,7 +12,11 @@ from configargparse import ArgParser
 from plumbum.cmd import grep, sed, shuf, wget
 
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
-from pyexec.mining.gihubtrequest import GitHubInfo, GitHubRequest
+from pyexec.mining.githubrequest import (
+    GitHubInfo,
+    GitHubRequest,
+    GitHubRequestException,
+)
 from pyexec.mining.gitrequest import GitRequest, RepoInfo
 from pyexec.mining.pypirequest import PyPIRequest
 from pyexec.testrunner.runner import AbstractRunner, BuildFailedException
@@ -90,16 +94,31 @@ class Miner:
                             continue
 
                         if self.__github_token is not None:
-                            github_request = GitHubRequest(
-                                self.__github_token,
-                                info.github_repo[0],
-                                info.github_repo[1],
-                                self.__logfile,
+                            self.__logger.debug("Getting information from GitHub")
+                            try:
+                                github_request = GitHubRequest(
+                                    self.__github_token,
+                                    info.github_repo[0],
+                                    info.github_repo[1],
+                                    self.__logfile,
+                                )
+                                info.github_info = github_request.get_github_info()
+                            except GitHubRequestException:
+                                pass
+                            except Exception as e:
+                                self.__logger.error(
+                                    "Unknown exxeption from GitHubRequest: {}".format(e)
+                                )
+
+                        try:
+                            gitrequest = GitRequest(
+                                info.github_repo[0], info.github_repo[1], self.__logfile
                             )
-                            info.github_info = github_request.get_github_info()
-                        gitrequest = GitRequest(
-                            info.github_repo[0], info.github_repo[1], self.__logfile
-                        )
+                        except Exception as e:
+                            self.__logger.error(
+                                "Unknown exception from GitRequest: {}".format(e)
+                            )
+
                         self.__checkout(tmpdir, gitrequest, info)
                     except KeyboardInterrupt:
                         self.__logger.info(
@@ -294,7 +313,7 @@ class PyexecMiner:
         miner_source.add_argument(
             "-r", "--random", dest="n", help="Try mining n random packages from PyPI"
         )
-        parser.add_optional(
+        parser.add_argument(
             "-t",
             "--github-token",
             dest="github_token",
