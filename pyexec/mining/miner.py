@@ -1,3 +1,4 @@
+import pickle
 import re
 import sys
 import time
@@ -156,6 +157,14 @@ class Miner:
                     )
                     return
                 projectdir = tmp_content[0]
+                count_runner = PytestRunner(
+                    tmpdir,
+                    projectdir.name,
+                    Dependencies("FROM python:3.8"),
+                    self.__logfile,
+                )
+                if count_runner.is_used_in_project():
+                    info.testcase_count = count_runner.get_test_count()
 
                 inferdockerfile = InferDockerfile(projectdir, self.__logfile)
                 try:
@@ -288,6 +297,9 @@ class PyexecMiner:
             self.__package_list, self.__github_token, output_dir.joinpath("log.txt")
         )
         result = miner.mine()
+
+        with open(output_dir.joinpath("pickled_data"), "wb") as p:
+            pickle.dump(result, p)
 
         with open(output_dir.joinpath("output.txt"), "w") as f:
             f.write("\n".join(str(e) for e in result))

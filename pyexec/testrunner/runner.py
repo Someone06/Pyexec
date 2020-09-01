@@ -67,6 +67,7 @@ class AbstractRunner(ABC):
             self.__remove_image()
 
     def __add_dependencies(self) -> None:
+        self._dependencies.clear_run_pythonpip()
         self._dependencies.push_run_command(
             r'RUN ["python", "-m", "pip", "install", "--upgrade", "pip"]'
         )

@@ -122,6 +122,11 @@ class Dependencies:
         else:
             self.__run_commands.insert(0, clause)
 
+    def clear_run_pythonpip(self) -> None:
+        self.__run_commands = [
+            line for line in self.__run_commands if "python-pip" not in line
+        ]
+
     def add_copy_command(self, clause: str) -> None:
         if not Dependencies.__full_match(clause, self.__copy_regex):
             raise Dependencies.InvalidFormatException(
