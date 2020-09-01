@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import Optional, Tuple
 
-from plumbum.cmd import grep, head, pytest, wc
+from plumbum.cmd import grep, sh
 from setuptools import find_packages
 
 from pyexec.testrunner.runner import AbstractRunner, RunnerNotUsedException
@@ -61,15 +61,20 @@ class PytestRunner(AbstractRunner):
 
     def get_test_count(self) -> int:
         if self.is_used_in_project():
-            cmd = pytest["--collect-only", "-q"] | head["-n", "-2"] | wc["-l"]
+            cmd = sh[
+                "-c",
+                r"""find """
+                + str(self._project_path)
+                + r""" -type f -name 'test*.py' -exec grep -e 'def test_' '{}' \; | wc -l""",
+            ]
             _, count, _ = cmd.run(retcode=None)
             try:
                 return int(count)
             except ValueError:
                 self._logger.warning("Unbale to parse pytest test count")
-                return 0
+                return -1
         else:
-            return 0
+            return -1
 
     def _extract_run_results(self, log: str) -> Tuple[TestResult, CoverageResult]:
         self._logger.debug("Parsing run results")

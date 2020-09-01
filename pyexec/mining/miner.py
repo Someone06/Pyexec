@@ -164,6 +164,7 @@ class Miner:
                     self.__logfile,
                 )
                 if count_runner.is_used_in_project():
+                    self.__logger.debug("Pytest is used!")
                     info.testcase_count = count_runner.get_test_count()
 
                 inferdockerfile = InferDockerfile(projectdir, self.__logfile)
