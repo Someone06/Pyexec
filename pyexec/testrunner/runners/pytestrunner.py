@@ -79,14 +79,14 @@ class PytestRunner(AbstractRunner):
         #  Example:
         #  === 6 failed, 5 passed, 2 skipped, 1 xfailed, 1 xpassed, 2 warnings in 2.49s ===
         matches = re.search(
-            r"=== (([0-9]+) failed, )?"
-            r"([0-9]+) passed"
-            r"(, ([0-9]+) skipped)?"
-            r"(, ([0-9]+) xfailed)?"
-            r"(, ([0-9]+) xpassed)?"
-            r"(, ([0-9]+) warnings)?"
-            r"(, ([0-9]+) error)?"
-            r" in ([0-9.]+)s ===\s*",
+            r"=+ ((\d+) failed, )?"
+            r"(\d+) passed"
+            r"(, (\d+) skipped)?"
+            r"(, (\d+) xfailed)?"
+            r"(, (\d+) xpassed)?"
+            r"(, (\d+) warnings?)?"
+            r"(, (\d+) errors?)?"
+            r" in ([\d.]+)s =+\s*",
             log,
         )
         if matches:
