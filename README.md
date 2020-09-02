@@ -42,7 +42,7 @@ To mine packages listed in a file packages.txt (Format: Name of a PyPI package, 
 pipenv run python3 pyexec-miner -p package.txt
 ```
 
-### Output
+## Output
 The program creates the folder ~/pyexec-output. 
 In this foder a folder with the timestap at start is created for every run of Pyexec.
 
@@ -53,6 +53,8 @@ However some project contain "__pycache__" folders with root privilages.
 Attepemting to delete such a folder causes a PermissionError by the operating system.
 However, the folder should be deleted automatically when the machine is shut down (because it is placed int the /tmp foder).
 Alternatively, the fodler can be deleted manually after pyexec completes.
+
+If a mined git repository does not contain any Python files then attempting to calculate the average cyclomatic complexity of that repository will fail with an error entry in the log.
 
 If two instances of pyexec attempt to mine the same project at the same time this will cause errors.
 
