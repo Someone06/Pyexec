@@ -22,7 +22,7 @@ class RepoInfo:
     has_setuppy: bool
     has_makefile: bool
     loc: int
-    average_complexity: int
+    average_complexity: float
     min_python_version: Optional[int]
 
 
@@ -133,7 +133,7 @@ class GitRequest:
                 return int(match.group(1))
         return None
 
-    def __average_complexity(self, project_dir: Path) -> int:
+    def __average_complexity(self, project_dir: Path) -> float:
         cmd = (
             radon["cc", "-a", project_dir]
             | tail["-n", 1]
@@ -142,7 +142,7 @@ class GitRequest:
         )
         _, out, _ = cmd.run(retcode=None)
         try:
-            return round(float(out))
+            return float(out)
         except ValueError:
             self.__logger.error("Error computing average cyclomatic complexity")
             return -1

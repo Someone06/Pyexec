@@ -149,6 +149,14 @@ class Dependencies:
         elif self.__cmd_command is None or replace:
             self.__cmd_command = clause
 
+    def pip_dependency_count(self) -> int:
+        return len([line for line in self.__run_commands if r'"pip","install"' in line])
+
+    def apt_dependency_count(self) -> int:
+        return len(
+            [line for line in self.__run_commands if r'"apt-get","install"' in line]
+        )
+
     def __repr__(self) -> str:
         return self.to_dockerfile()
 
