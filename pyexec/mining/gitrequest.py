@@ -23,6 +23,7 @@ class RepoInfo:
     has_makefile: bool
     loc: int
     average_complexity: int
+    min_python_version: Optional[int]
 
 
 @dataclass
@@ -46,6 +47,11 @@ class GitRequest:
     )
     __bugfix_regex = re.compile(
         r"(error|fix|issue|mistake|incorrect|fault|detect|flaw)", re.IGNORECASE
+    )
+
+    __python_version_regex_1 = re.compile(r"[Pp]ython ?:: ?3\.\d+")
+    __python_version_regex_2 = re.compile(
+        r"""python_requires ?= ?["'].?.?3\.(\d+)["']"""
     )
 
     def __init__(
@@ -92,7 +98,7 @@ class GitRequest:
         # self.__test_frameworks = self.__detect_test_frameworks(path)
         #        self._test_run_results = self._extract_test_run_results(path)
         # self.__type_annotations = self.__detect_type_annotations(path)
-        self.__has_setuppy = path.joinpath("setup.yp").exists()
+        self.__has_setuppy = path.joinpath("setup.py").exists()
         self.__has_requirementstxt = path.joinpath("requirements.txt").exists()
         self.__has_makefile = path.joinpath("Makefile").exists()
 
@@ -102,7 +108,29 @@ class GitRequest:
             has_makefile=self.__has_makefile,
             loc=self.__num_lines,
             average_complexity=self.__average_complexity(path),
+            min_python_version=self.__min_python_version(path),
         )
+
+    def __min_python_version(self, project_dir: Path) -> Optional[int]:
+        setuppy = project_dir.joinpath("setup.py")
+        if setuppy.exists() and setuppy.is_file():
+            with open(setuppy, "r") as f:
+                content = f.read()
+            match = self.__python_version_regex_2.search(content)
+            if match is not None:
+                return int(match.group(1))
+            found = self.__python_version_regex_1.findall(content)
+            versions = [int(m[m.index(".") + 1 :]) for m in found]
+            if len(versions) != 0:
+                return min(versions)
+        setupcfg = project_dir.joinpath("setup.cfg")
+        if setupcfg.exists() and setupcfg.is_file():
+            with open(setupcfg, "r") as f:
+                content = f.read()
+            match = self.__python_version_regex_2.search(content)
+            if match is not None:
+                return int(match.group(1))
+        return None
 
     def __average_complexity(self, project_dir: Path) -> int:
         cmd = (

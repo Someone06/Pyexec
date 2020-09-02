@@ -15,7 +15,6 @@ from pyexec.util.logging import get_logger
 
 @dataclass
 class GitHubInfo:
-    python_version: str
     created_at: datetime
     last_updated: datetime
 
@@ -59,9 +58,7 @@ class GitHubRequest:
     def get_github_info(self) -> GitHubInfo:
         self.__logger.debug("Getting GitHubInfo")
         return GitHubInfo(
-            python_version=self.get_language(),
-            created_at=self.get_created_at(),
-            last_updated=self.get_updated_at(),
+            created_at=self.get_created_at(), last_updated=self.get_updated_at(),
         )
 
     def wait_if_necessary(self) -> None:

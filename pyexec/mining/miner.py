@@ -30,7 +30,9 @@ from pyexec.util.logging import get_logger
 @dataclass
 class PackageInfo:
     name: str
+    project_on_pypi: bool = False
     github_repo: Optional[Tuple[str, str]] = None
+    github_repo_exists: bool = False
     dockerfile: Optional[Dependencies] = None
     dockerimage_build: bool = False
     testcase_count: int = 0
@@ -39,12 +41,20 @@ class PackageInfo:
     repo_info: Optional[RepoInfo] = None
 
     @property
-    def has_github_repository(self) -> bool:
-        return self.github_info is not None
+    def has_testsuit(self) -> bool:
+        return self.testcase_count != 0
 
     @property
-    def test_executed(self) -> bool:
+    def testsuit_executed(self) -> bool:
+        return self.has_testsuit and self.dockerimage_build
+
+    @property
+    def testsuit_result_parsed(self) -> bool:
         return self.test_result is not None
+
+    @property
+    def github_link_found(self) -> bool:
+        return self.github_repo is not None
 
 
 class Miner:
@@ -87,6 +97,7 @@ class Miner:
                             )
                             continue
 
+                        info.project_on_pypi = True
                         info.github_repo = self.__extract_repository_path(pypi_info)
                         if info.github_repo is None:
                             self.__logger.info(
@@ -142,8 +153,10 @@ class Miner:
             with TemporaryDirectory(dir=basedir) as d:
                 tmpdir = Path(d)
                 try:
+                    info.github_repo_exists = True
                     info.repo_info = request.grab(tmpdir)
                 except GitRequest.GitRepoNotFoundException:
+                    info.github_repo_exists = False
                     self.__logger.info(
                         "Cound not clone package {} from GitHub".format(info.name)
                     )
