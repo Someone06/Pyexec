@@ -53,6 +53,7 @@ class GitRequest:
     __python_version_regex_2 = re.compile(
         r"""python_requires ?= ?["'].?.?3\.(\d+)["']"""
     )
+    __python_version_regex_3 = re.compile(r"""python_version ?..? ?["']?3\.(\d+)""")
 
     def __init__(
         self, repo_user: str, repo_name: str, logfile: Optional[Path] = None
@@ -127,7 +128,7 @@ class GitRequest:
         if setupcfg.exists() and setupcfg.is_file():
             with open(setupcfg, "r") as f:
                 content = f.read()
-            match = self.__python_version_regex_2.search(content)
+            match = self.__python_version_regex_3.search(content)
             if match is not None:
                 return int(match.group(1))
         return None
