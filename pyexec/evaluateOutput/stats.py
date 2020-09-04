@@ -2,7 +2,7 @@ import pickle
 from datetime import datetime, timedelta
 from functools import reduce
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, TypeVar
 
 from pyexec.mining.githubrequest import GitHubInfo
 from pyexec.mining.gitrequest import RepoInfo
@@ -26,35 +26,40 @@ class Stats:
             self.__logger.error("No such file: {}".format(pickled_data))
             raise ValueError("Path {} does not refer to a file".format(pickled_data))
 
-    def __accumulate(self, lmbda: Callable[[PackageInfo], bool]) -> int:
-        return len([p for p in self.__mined_data if lmbda(p)])
+    T = TypeVar("T")
+
+    def __accumulate(self, lmbda: Callable[[T], bool], lst: List[T]) -> int:
+        return len([p for p in lst if lmbda(p)])
+
+    def __accumulate_package_info(self, lmbda: Callable[[PackageInfo], bool]) -> int:
+        return self.__accumulate(lmbda, self.__mined_data)
 
     def projects_attempted(self) -> int:
         return len(self.__mined_data)
 
     def project_on_pypi(self) -> int:
-        return self.__accumulate(lambda p: p.project_on_pypi)
+        return self.__accumulate_package_info(lambda p: p.project_on_pypi)
 
     def github_link_found(self) -> int:
-        return self.__accumulate(lambda p: p.github_link_found)
+        return self.__accumulate_package_info(lambda p: p.github_link_found)
 
     def github_repos_found(self) -> int:
-        return self.__accumulate(lambda p: p.github_repo_exists)
+        return self.__accumulate_package_info(lambda p: p.github_repo_exists)
 
     def dockerfiles_inferred(self) -> int:
-        return self.__accumulate(lambda p: p.dockerfile is not None)
+        return self.__accumulate_package_info(lambda p: p.dockerfile is not None)
 
     def dockerimages_built(self) -> int:
-        return self.__accumulate(lambda p: p.dockerimage_build)
+        return self.__accumulate_package_info(lambda p: p.dockerimage_build)
 
     def testsuit_found(self) -> int:
-        return self.__accumulate(lambda p: p.has_testsuit)
+        return self.__accumulate_package_info(lambda p: p.has_testsuit)
 
     def testsuit_executed(self) -> int:
-        return self.__accumulate(lambda p: p.testsuit_executed)
+        return self.__accumulate_package_info(lambda p: p.testsuit_executed)
 
     def testsuit_parsed(self) -> int:
-        return self.__accumulate(lambda p: p.testsuit_result_parsed)
+        return self.__accumulate_package_info(lambda p: p.testsuit_result_parsed)
 
     def __repo_info(self) -> List[RepoInfo]:
         return [p.repo_info for p in self.__mined_data if p.repo_info is not None]
@@ -83,6 +88,21 @@ class Stats:
             map(lambda g: datetime.today() - g.created_at, self.__github_info())
         )
 
+    def __accumulate_repo_info(self, lmbda: Callable[[RepoInfo], bool]) -> int:
+        return self.__accumulate(lmbda, self.__repo_info())
+
+    def setuppys(self) -> int:
+        return self.__accumulate_repo_info(lambda p: p.has_setuppy)
+
+    def requirementstxts(self) -> int:
+        return self.__accumulate_repo_info(lambda p: p.has_requirementstxt)
+
+    def makefiles(self) -> int:
+        return self.__accumulate_repo_info(lambda p: p.has_makefile)
+
+    def pipfiles(self) -> int:
+        return self.__accumulate_repo_info(lambda p: p.has_pipfile)
+
 
 def main(argv: List[str]) -> None:
     if len(argv) != 2:
@@ -100,3 +120,7 @@ def main(argv: List[str]) -> None:
         print("Dockerimages built: {}".format(stats.dockerimages_built()))
         print("Testsuits executed: {}".format(stats.testsuit_executed()))
         print("Testresults parsed: {}".format(stats.testsuit_parsed()))
+        print("Setup.py: {}".format(stats.setuppys()))
+        print("Requirements.txt: {}".format(stats.requirementstxts()))
+        print("Makefiles: {}".format(stats.makefiles()))
+        print("Pipfiles: {}".format(stats.pipfiles()))

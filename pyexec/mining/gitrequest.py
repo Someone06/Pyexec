@@ -21,6 +21,7 @@ class RepoInfo:
     has_requirementstxt: bool
     has_setuppy: bool
     has_makefile: bool
+    has_pipfile: bool
     loc: int
     average_complexity: float
     min_python_version: Optional[int]
@@ -102,11 +103,13 @@ class GitRequest:
         self.__has_setuppy = path.joinpath("setup.py").exists()
         self.__has_requirementstxt = path.joinpath("requirements.txt").exists()
         self.__has_makefile = path.joinpath("Makefile").exists()
+        self.__has_pipfile = path.joinpath("Pipfile").exists()
 
         return RepoInfo(
             has_requirementstxt=self.__has_requirementstxt,
             has_setuppy=self.__has_setuppy,
             has_makefile=self.__has_makefile,
+            has_pipfile=self.__has_pipfile,
             loc=self.__num_lines,
             average_complexity=self.__average_complexity(path),
             min_python_version=self.__min_python_version(path),
@@ -182,6 +185,10 @@ class GitRequest:
     @property
     def has_makefile(self) -> bool:
         return self.__has_makefile
+
+    @property
+    def has_pipfile(self) -> bool:
+        return self.__has_pipfile
 
     """
     @property
