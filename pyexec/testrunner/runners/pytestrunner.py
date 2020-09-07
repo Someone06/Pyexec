@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Pattern, Tuple
 
 from plumbum.cmd import grep, sh
 from setuptools import find_packages
@@ -11,6 +11,31 @@ from pyexec.util.dependencies import Dependencies
 
 
 class PytestRunner(AbstractRunner):
+
+    _pytest_regex: Pattern = re.compile(
+        r"=+"
+        r"(?:"
+        r"(?: (?P<failed>\d+) failed)?"
+        r"(?:,? (?P<passed>\d+) passed)?"
+        r"(?:,? (?P<skipped>\d+) skipped)?"
+        r"(?:,? (?P<xfailed>\d+) xfailed)?"
+        r"(?:,? (?P<xpassed>\d+) xpassed)?"
+        r"(?:,? (?P<warnings>\d+) warnings?)?"
+        r"(?:,? (?P<errors>\d+) errors?)?"
+        r"|"
+        r" no tests? ran"
+        r")"
+        r" in (?P<time>[\d.]+)s =+\s*"
+    )
+    _coverage_regex: Pattern = re.compile(
+        r'\s*"totals": \{\s*'
+        r'\s*"covered_lines": (?P<covered>\d+),\s*'
+        r'\s*"num_statements": (?P<stmts>\d+),\s*'
+        r'\s*"percent_covered": (?P<percent>[\d.]+),\s*'
+        r'\s*"missing_lines": (?P<missing>\d+),\s*'
+        r'\s*"excluded_lines": (?P<excluded>\d+)\s*'
+    )
+
     def __init__(
         self,
         tmp_path: Path,
@@ -81,19 +106,7 @@ class PytestRunner(AbstractRunner):
         test_result = None
         coverage_result = None
 
-        #  Example:
-        #  === 6 failed, 5 passed, 2 skipped, 1 xfailed, 1 xpassed, 2 warnings in 2.49s ===
-        matches = re.search(
-            r"=+( (?P<failed>\d+) failed)?"
-            r"(,? (?P<passed>\d+) passed)?"
-            r"(,? (?P<skipped>\d+) skipped)?"
-            r"(,? (?P<xfailed>\d+) xfailed)?"
-            r"(,? (?P<xpassed>\d+) xpassed)?"
-            r"(,? (?P<warnings>\d+) warnings?)?"
-            r"(,? (?P<errors>\d+) errors?)?"
-            r" in (?P<time>[\d.]+)s =+\s*",
-            log,
-        )
+        matches = self._pytest_regex.search(log)
         if matches:
             self._logger.debug("Matched test results")
             failed = int(matches.group("failed")) if matches.group("failed") else 0
@@ -108,40 +121,17 @@ class PytestRunner(AbstractRunner):
             time = float(matches.group("time"))
 
             test_result = TestResult(
-                failed=failed,
-                passed=passed,
-                skipped=skipped,
-                xfailed=xfailed,
-                xpassed=xpassed,
-                warnings=warnings,
-                error=error,
-                time=time,
+                failed, passed, skipped, xfailed, xpassed, warnings, error, time,
             )
 
-        # Example (without the #'s):
-        #    "totals": {
-        #        "covered_lines": 0,
-        #        "num_statements": 234,
-        #        "percent_covered": 0.0,
-        #        "missing_lines": 234,
-        #        "excluded_lines": 0
-        #    }
-        matches = re.search(
-            r'\s*"totals": \{\s*'
-            r'\s*"covered_lines": (\d+),\s*'
-            r'\s*"num_statements": (\d+),\s*'
-            r'\s*"percent_covered": (\d+)\.(\d+),\s*'
-            r'\s*"missing_lines": (\d+),\s*'
-            r'\s*"excluded_lines": (\d+)\s*',
-            log,
-        )
+        matches = self._coverage_regex.search(log)
         if matches:
             self._logger.debug("Matched coverage")
-            covered_lines = int(matches.group(1))
-            num_statements = int(matches.group(2))
-            percent_covered = float(matches.group(3) + "." + matches.group(4))
-            missing_lines = int(matches.group(5))
-            excluded_lines = int(matches.group(6))
+            covered_lines = int(matches.group("covered"))
+            num_statements = int(matches.group("stmts"))
+            percent_covered = float(matches.group("percent"))
+            missing_lines = int(matches.group("missing"))
+            excluded_lines = int(matches.group("excluded"))
 
             coverage_result = CoverageResult(
                 covered_lines,
@@ -152,7 +142,9 @@ class PytestRunner(AbstractRunner):
             )
 
         if test_result is None or coverage_result is None:
-            self._logger.debug("Unexpected output format of pytest and pytest-cov")
+            self._logger.debug(
+                "Unexpected output format of pytest and pytest-cov:\n{}".format(log)
+            )
             raise ValueError("Unexpected output format of pytest and pytest-cov")
         else:
             return test_result, coverage_result
