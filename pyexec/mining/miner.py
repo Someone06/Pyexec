@@ -192,21 +192,18 @@ class Miner:
                     self.__logger.info("v2 timed out on package {}".format(info.name))
                     return
 
-                if info.dockerfile is not None:
-                    runner: AbstractRunner = PytestRunner(
-                        tmpdir, projectdir.name, info.dockerfile, self.__logfile
-                    )
-                    if runner.is_used_in_project():
-                        info.testcase_count = runner.get_test_count()
-                        try:
-                            info.dockerimage_build = True
-                            info.test_result = runner.run()
-                        except BuildFailedException:
-                            info.dockerimage_build = False
-                        except ValueError:
-                            self.__logger.error(
-                                "Cound not parse test execution results"
-                            )
+                runner: AbstractRunner = PytestRunner(
+                    tmpdir, projectdir.name, info.dockerfile, self.__logfile
+                )
+                if runner.is_used_in_project():
+                    info.testcase_count = runner.get_test_count()
+                    try:
+                        info.dockerimage_build = True
+                        info.test_result = runner.run()
+                    except BuildFailedException:
+                        info.dockerimage_build = False
+                    except ValueError:
+                        self.__logger.error("Cound not parse test execution results")
 
         except PermissionError:
             pass

@@ -31,8 +31,8 @@ class PytestRunner(AbstractRunner):
 
     def _add_dependencies(self) -> None:
         self._logger.debug("Adding dependencies")
-        self._dependencies.add_run_command(r'RUN ["pip", "install", "pytest"]')
-        self._dependencies.add_run_command(r'RUN ["pip", "install", "coverage"]')
+        self._dependencies.add_run_command(r"""RUN ["pip", "install", "pytest"]""")
+        self._dependencies.add_run_command(r"""RUN ["pip", "install", "coverage"]""")
         self._dependencies.set_cmd_command(
             r"""CMD ["sh", "-c", "coverage run --source={} -m pytest -rA --tb=no -report=term-missing ; coverage json --pretty-print -o- | sed '/totals/,$!d' | head -n -1"]""".format(
                 ",".join(find_packages(where=self._project_path))
@@ -84,26 +84,28 @@ class PytestRunner(AbstractRunner):
         #  Example:
         #  === 6 failed, 5 passed, 2 skipped, 1 xfailed, 1 xpassed, 2 warnings in 2.49s ===
         matches = re.search(
-            r"=+ ((\d+) failed, )?"
-            r"(\d+) passed"
-            r"(, (\d+) skipped)?"
-            r"(, (\d+) xfailed)?"
-            r"(, (\d+) xpassed)?"
-            r"(, (\d+) warnings?)?"
-            r"(, (\d+) errors?)?"
-            r" in ([\d.]+)s =+\s*",
+            r"=+( (?P<failed>\d+) failed)?"
+            r"(,? (?P<passed>\d+) passed)?"
+            r"(,? (?P<skipped>\d+) skipped)?"
+            r"(,? (?P<xfailed>\d+) xfailed)?"
+            r"(,? (?P<xpassed>\d+) xpassed)?"
+            r"(,? (?P<warnings>\d+) warnings?)?"
+            r"(,? (?P<errors>\d+) errors?)?"
+            r" in (?P<time>[\d.]+)s =+\s*",
             log,
         )
         if matches:
             self._logger.debug("Matched test results")
-            failed = int(matches.group(2)) if matches.group(2) else 0
-            passed = int(matches.group(3)) if matches.group(3) else 0
-            skipped = int(matches.group(5)) if matches.group(5) else 0
-            xfailed = int(matches.group(7)) if matches.group(7) else 0
-            xpassed = int(matches.group(9)) if matches.group(9) else 0
-            warnings = int(matches.group(11)) if matches.group(11) else 0
-            error = int(matches.group(13)) if matches.group(13) else 0
-            time = float(matches.group(14)) if matches.group(14) else 0.0
+            failed = int(matches.group("failed")) if matches.group("failed") else 0
+            passed = int(matches.group("passed")) if matches.group("passed") else 0
+            skipped = int(matches.group("skipped")) if matches.group("skipped") else 0
+            xfailed = int(matches.group("xfailed")) if matches.group("xfailed") else 0
+            xpassed = int(matches.group("xpassed")) if matches.group("xpassed") else 0
+            warnings = (
+                int(matches.group("warnings")) if matches.group("warnings") else 0
+            )
+            error = int(matches.group("errors")) if matches.group("errors") else 0
+            time = float(matches.group("time"))
 
             test_result = TestResult(
                 failed=failed,

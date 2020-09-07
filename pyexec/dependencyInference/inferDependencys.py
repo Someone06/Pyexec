@@ -111,7 +111,11 @@ class InferDockerfile:
                 self.__project_path.name
             )
         )
-        return Dependencies.merge_dependencies(dependencies)
+        try:
+            return Dependencies.merge_dependencies(dependencies)
+        except Exception as e:
+            self.__logger.debug(e)
+            raise e
 
     def __find_python_files(self) -> List[Path]:
         command = find[

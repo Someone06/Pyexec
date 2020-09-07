@@ -67,11 +67,7 @@ class AbstractRunner(ABC):
             self.__remove_image()
 
     def __add_dependencies(self) -> None:
-        self._dependencies.clear_run_pythonpip()
-        self._dependencies.push_run_command(
-            r'RUN ["python", "-m", "pip", "install", "--upgrade", "pip"]'
-        )
-        self._dependencies.add_copy_command(
+        self._dependencies.set_copy_command(
             "COPY {} /tmp/{}/".format(self._project_path.name, self._project_path.name)
         )
         self._dependencies.set_workdir_command(
