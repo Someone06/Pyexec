@@ -53,7 +53,7 @@ class AbstractRunner(ABC):
         raise NotImplementedError("Implement is_used_in_project()")
 
     @abstractmethod
-    def get_test_count(self) -> int:
+    def get_test_count(self) -> Optional[int]:
         raise NotImplementedError("Implement get_test_count()")
 
     def _run(self, tout: Optional[int] = None) -> Tuple[str, str]:

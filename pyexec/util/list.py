@@ -21,3 +21,7 @@ def all_equal(lst: List[T]) -> bool:
         if not e == first:
             return False
     return True
+
+
+def diff(lst1: List[T], lst2: List[T]) -> List[T]:
+    return list(set(lst1).symmetric_difference(set(lst2)))

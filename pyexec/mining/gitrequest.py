@@ -22,8 +22,8 @@ class RepoInfo:
     has_setuppy: bool
     has_makefile: bool
     has_pipfile: bool
-    loc: int
-    average_complexity: float
+    loc: Optional[int]
+    average_complexity: Optional[float]
     min_python_version: Optional[int]
 
 
@@ -94,7 +94,7 @@ class GitRequest:
         # commits = self.__add_issue_ids_to_commits(issue_ids, commits)
 
         cloc_stats = self.__get_cloc_stats(path)
-        if cloc_stats is not None and len(cloc_stats) == 2:
+        if cloc_stats is not None:
             self.__num_files, self.__num_lines = cloc_stats
         # self.__head_commit = repo.head.commit
         # self.__test_frameworks = self.__detect_test_frameworks(path)
@@ -136,7 +136,7 @@ class GitRequest:
                 return int(match.group(1))
         return None
 
-    def __average_complexity(self, project_dir: Path) -> float:
+    def __average_complexity(self, project_dir: Path) -> Optional[float]:
         cmd = (
             radon["cc", "-a", project_dir]
             | tail["-n", 1]
@@ -148,7 +148,7 @@ class GitRequest:
             return float(out)
         except ValueError:
             self.__logger.error("Error computing average cyclomatic complexity")
-            return -1
+            return None
 
     @property
     def num_lines(self) -> int:
@@ -263,8 +263,7 @@ class GitRequest:
             commits[commit].issues = list(ids)
         return commits
 
-    @staticmethod
-    def __get_cloc_stats(path: Path) -> Optional[Tuple[int, int]]:
+    def __get_cloc_stats(self, path: Path) -> Optional[Tuple[int, int]]:
         chain = cloc["--include-lang=Python", "--quiet", path] | grep["Python"]
         _, result, _ = chain.run(retcode=None)
         if result is not None:
@@ -274,6 +273,7 @@ class GitRequest:
             # We are interested in #files and #LOC
             if len(results) >= 5:
                 return int(results[1]), int(results[4])
+        self.__logger.error("Unable to obtaion cloc stats")
         return None
 
     @staticmethod

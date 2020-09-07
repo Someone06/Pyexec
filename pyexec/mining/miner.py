@@ -35,14 +35,14 @@ class PackageInfo:
     github_repo_exists: bool = False
     dockerfile: Optional[Dependencies] = None
     dockerimage_build: bool = False
-    testcase_count: int = 0
+    testcase_count: Optional[int] = None
     test_result: Optional[Tuple[TestResult, CoverageResult]] = None
     github_info: Optional[GitHubInfo] = None
     repo_info: Optional[RepoInfo] = None
 
     @property
     def has_testsuit(self) -> bool:
-        return self.testcase_count != 0
+        return self.testcase_count is not None
 
     @property
     def testsuit_executed(self) -> bool:

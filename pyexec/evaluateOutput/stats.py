@@ -4,6 +4,8 @@ from functools import reduce
 from pathlib import Path
 from typing import Callable, List, Optional, TypeVar
 
+from scipy.stats import mannwhitneyu as mwy
+
 from pyexec.mining.githubrequest import GitHubInfo
 from pyexec.mining.gitrequest import RepoInfo
 from pyexec.mining.miner import PackageInfo
@@ -61,35 +63,31 @@ class Stats:
     def testsuit_parsed(self) -> int:
         return self.__accumulate_package_info(lambda p: p.testsuit_result_parsed)
 
-    def __repo_info(self) -> List[RepoInfo]:
-        return [p.repo_info for p in self.__mined_data if p.repo_info is not None]
+    def __repo_info(self, lst: List[PackageInfo]) -> List[RepoInfo]:
+        return [p.repo_info for p in lst if p.repo_info is not None]
 
-    def locs(self) -> List[int]:
-        return list(map(lambda r: r.loc, self.__repo_info()))
-
-    def comlexities(self) -> List[float]:
-        return list(map(lambda r: r.average_complexity, self.__repo_info()))
-
-    def min_python_versions(self) -> List[int]:
+    def min_python_versions(self, lst: List[PackageInfo]) -> List[int]:
         return [
             r.min_python_version
-            for r in self.__repo_info()
+            for r in self.__repo_info(lst)
             if r.min_python_version is not None
         ]
 
-    def __github_info(self) -> List[GitHubInfo]:
-        return [p.github_info for p in self.__mined_data if p.github_info is not None]
+    def __github_info(self, lst: List[PackageInfo]) -> List[GitHubInfo]:
+        return [p.github_info for p in lst if p.github_info is not None]
 
-    def active_times(self) -> List[timedelta]:
-        return list(map(lambda g: g.last_updated - g.created_at, self.__github_info()))
-
-    def exits_since(self) -> List[timedelta]:
+    def active_times(self, lst: List[PackageInfo]) -> List[timedelta]:
         return list(
-            map(lambda g: datetime.today() - g.created_at, self.__github_info())
+            map(lambda g: g.last_updated - g.created_at, self.__github_info(lst))
+        )
+
+    def exits_for(self, lst: List[PackageInfo]) -> List[timedelta]:
+        return list(
+            map(lambda g: datetime.today() - g.created_at, self.__github_info(lst))
         )
 
     def __accumulate_repo_info(self, lmbda: Callable[[RepoInfo], bool]) -> int:
-        return self.__accumulate(lmbda, self.__repo_info())
+        return self.__accumulate(lmbda, self.__repo_info(self.__mined_data))
 
     def setuppys(self) -> int:
         return self.__accumulate_repo_info(lambda p: p.has_setuppy)
@@ -102,6 +100,28 @@ class Stats:
 
     def pipfiles(self) -> int:
         return self.__accumulate_repo_info(lambda p: p.has_pipfile)
+
+    def passed_stage_mined(self) -> List[PackageInfo]:
+        return [p for p in self.__mined_data if p.github_repo_exists]
+
+    def passed_stage_dockerfile(self) -> List[PackageInfo]:
+        return [p for p in self.__mined_data if p.dockerfile is not None]
+
+    def passed_stage_tests_executed(self) -> List[PackageInfo]:
+        return [p for p in self.__mined_data if p.testsuit_result_parsed]
+
+    def do_test(
+        self, compared: List[PackageInfo], prop: Callable[[PackageInfo], int]
+    ) -> float:
+        other = [
+            p
+            for p in self.__mined_data
+            if p.name not in map(lambda p: p.name, compared)
+        ]
+        _, pvalue = mwy(
+            list(map(prop, compared)), list(map(prop, other)), alternative="two-sided"
+        )
+        return pvalue
 
 
 def main(argv: List[str]) -> None:

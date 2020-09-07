@@ -84,7 +84,7 @@ class PytestRunner(AbstractRunner):
                 return True
         return False
 
-    def get_test_count(self) -> int:
+    def get_test_count(self) -> Optional[int]:
         if self.is_used_in_project():
             cmd = sh[
                 "-c",
@@ -97,9 +97,9 @@ class PytestRunner(AbstractRunner):
                 return int(count)
             except ValueError:
                 self._logger.warning("Unbale to parse pytest test count")
-                return -1
+                return None
         else:
-            return -1
+            return None
 
     def _extract_run_results(self, log: str) -> Tuple[TestResult, CoverageResult]:
         self._logger.debug("Parsing run results")
