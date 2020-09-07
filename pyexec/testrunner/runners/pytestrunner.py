@@ -56,8 +56,8 @@ class PytestRunner(AbstractRunner):
 
     def _add_dependencies(self) -> None:
         self._logger.debug("Adding dependencies")
-        self._dependencies.add_run_command(r"""RUN ["pip", "install", "pytest"]""")
-        self._dependencies.add_run_command(r"""RUN ["pip", "install", "coverage"]""")
+        self._dependencies.add_pip_dependency("pytest")
+        self._dependencies.add_pip_dependency("coverage")
         self._dependencies.set_cmd_command(
             r"""CMD ["sh", "-c", "coverage run --source={} -m pytest -rA --tb=no -report=term-missing ; coverage json --pretty-print -o- | sed '/totals/,$!d' | head -n -1"]""".format(
                 ",".join(find_packages(where=self._project_path))

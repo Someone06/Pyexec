@@ -69,12 +69,12 @@ class Dependencies:
         match = self.__pip_install_regex.match(cmd)
         if match is not None:
             d = match.groupdict()
-            self.__merge_dict(self.__pip_installs, {d["name"]: d["version"]})
+            self.add_pip_dependency(d["name"], d["version"])
             return True
         match = self.__apt_install_regex.match(cmd)
         if match is not None:
             d = match.groupdict()
-            self.__merge_dict(self.__apt_installs, {d["name"]: d["version"]})
+            self.add_apt_dependency(d["name"], d["version"])
             return True
         return self.__apt_update_regex.match(cmd) is not None
 
@@ -186,6 +186,14 @@ class Dependencies:
         elif self.__cmd_command is None or replace:
             self.__cmd_command = cmd
 
+    def add_pip_dependency(self, name: str, version: Optional[str] = None) -> None:
+        if name not in self.__pip_installs or self.__pip_installs[name] is None:
+            self.__pip_installs[name] = version
+
+    def add_apt_dependency(self, name: str, version: Optional[str] = None) -> None:
+        if name not in self.__apt_installs or self.__apt_installs[name] is None:
+            self.__apt_installs[name] = version
+
     def pip_dependency_count(self) -> int:
         return len(self.__pip_installs)
 
@@ -196,15 +204,9 @@ class Dependencies:
         return self.to_dockerfile()
 
     @staticmethod
-    def __full_match(candidate: str, pattern: Pattern) -> bool:
-        return pattern.match(candidate) is not None
-
-    @staticmethod
     def __merge_dict(
         base: Dict[str, Optional[str]], addition: Dict[str, Optional[str]]
     ) -> None:
         for name, version in addition.items():
-            if name not in base:
-                base[name] = version
-            elif base[name] is None:
+            if name not in base or base[name] is None:
                 base[name] = version
