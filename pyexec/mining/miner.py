@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from configargparse import ArgParser
 from plumbum.cmd import grep, sed, shuf, wget
 
+from pyexec.dependencyInference.extraDependencies import ExtraDependencies
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
 from pyexec.mining.githubrequest import (
     GitHubInfo,
@@ -34,6 +35,7 @@ class PackageInfo:
     github_repo: Optional[Tuple[str, str]] = None
     github_repo_exists: bool = False
     dockerfile: Optional[Dependencies] = None
+    dockerfile_source: Optional[str] = None
     dockerimage_build: bool = False
     testcase_count: Optional[int] = None
     test_result: Optional[Tuple[TestResult, CoverageResult]] = None
@@ -180,18 +182,17 @@ class Miner:
                     self.__logger.debug("Pytest is used!")
                     info.testcase_count = count_runner.get_test_count()
 
-                inferdockerfile = InferDockerfile(projectdir, self.__logfile)
-                try:
-                    info.dockerfile = inferdockerfile.infer_dockerfile()
-                except InferDockerfile.NoEnvironmentFoundException:
-                    self.__logger.info(
-                        "No environment found for package {}".format(info.name)
-                    )
-                    return
-                except InferDockerfile.TimeoutException:
-                    self.__logger.info("v2 timed out on package {}".format(info.name))
-                    return
+                info.dockerfile = self._run_v2(projectdir)
+                if not info.dockerfile:
+                    info.dockerfile = self._get_extra_dependencies(projectdir)
+                    if info.dockerfile is None:
+                        return
+                    else:
+                        info.dockerfile_source = "Extras"
+                else:
+                    info.dockerfile_source = "V2"
 
+                self.__logger.debug("Found dependencies")
                 runner: AbstractRunner = PytestRunner(
                     tmpdir, projectdir.name, info.dockerfile, self.__logfile
                 )
@@ -215,6 +216,31 @@ class Miner:
             Note: Creating a temporary directory in the (user owned) home folder does not solve
             this problem.
             """
+
+    def _run_v2(self, projectdir: Path) -> Optional[Dependencies]:
+        inferdockerfile = InferDockerfile(projectdir, self.__logfile)
+        try:
+            return inferdockerfile.infer_dockerfile()
+        except InferDockerfile.NoEnvironmentFoundException:
+            self.__logger.info(
+                "No environment found for package {}".format(projectdir.name)
+            )
+        except InferDockerfile.TimeoutException:
+            self.__logger.info("v2 timed out on package {}".format(projectdir.name))
+        return None
+
+    def _get_extra_dependencies(self, projectdir: Path) -> Optional[Dependencies]:
+        extra = ExtraDependencies(projectdir, self.__logfile)
+        deps = extra.get_extra_dependencies()
+        if deps:
+            df = Dependencies("FROM python:3.8")
+            for name, version in deps.items():
+                df.add_pip_dependency(name, version)
+            self.__logger.debug("Found extra dependencies")
+            return df
+        else:
+            self.__logger.debug("Found no extra dependencies")
+            return None
 
     def __extract_repository_path(
         self, repo_info: Dict[str, str]
