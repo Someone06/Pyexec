@@ -8,7 +8,7 @@ from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependen
 class InferFromPipfile(InferExtraDependencies):
     _section_regex: Pattern = re.compile(r"""^\[+(?P<section>[\w\d._-]+)\]+$""")
     _version_regex: Pattern = re.compile(
-        r"""^(?P<name>[\w\d._-]+) ?(?:= ?['"]?(?:[<=>]+ ?(?P<version>[/d/w._-]+)| ?\* ?) ?["']?)?$"""
+        r"""^(?P<name>[\w\d._-]+) ?(?:= ?['"]?(?:[<=>]+ ?(?P<version>[\d\w._-]+)(?: ?<=? ?[\d\w._-]+)?| ?\* ?) ?["']?)?$"""
     )
 
     def __init__(self, file_path: Path, logfile: Optional[Path]) -> None:
@@ -40,6 +40,7 @@ class InferFromPipfile(InferExtraDependencies):
         lines = self._file_content.splitlines()
         section: Optional[str] = None
         for line in lines:
+            line = line.split("#", 1)[0]
             line = line.strip()
             if line == "":
                 continue

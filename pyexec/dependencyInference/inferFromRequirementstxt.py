@@ -7,7 +7,7 @@ from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependen
 
 class InferFromRequirementstxt(InferExtraDependencies):
     _deps_regex: Pattern = re.compile(
-        r"""^(?P<name>[\d\w._-]+)(?: ?[<=>]+ ?(?P<version>[\d\w._-]+)(?:, ?<=? ?[\d._-]+)?)?$"""
+        r"""^(?P<name>[\d\w._-]+)(?: ?[<=>]+ ?(?P<version>[\d\w._-]+)(?:, ?<=? ?[\d\w._-]+)?)?$"""
     )
 
     def __init__(self, file_path: Path, logfile: Optional[Path] = None) -> None:
@@ -20,8 +20,8 @@ class InferFromRequirementstxt(InferExtraDependencies):
         lines = self._file_content.splitlines()
         result: Dict[str, Optional[str]] = dict()
         for line in lines:
-            line = line.strip()
             line = line.split("#", 1)[0]
+            line = line.strip()
             if line == "":
                 continue
             match = self._deps_regex.match(line)
