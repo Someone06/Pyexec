@@ -14,6 +14,7 @@ from plumbum.cmd import grep, sed, shuf, wget
 
 from pyexec.dependencyInference.extraDependencies import ExtraDependencies
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
+from pyexec.dockerTools.dockerTools import BuildFailedException, DockerTools
 from pyexec.mining.githubrequest import (
     GitHubInfo,
     GitHubRequest,
@@ -21,7 +22,7 @@ from pyexec.mining.githubrequest import (
 )
 from pyexec.mining.gitrequest import GitRequest, RepoInfo
 from pyexec.mining.pypirequest import PyPIRequest
-from pyexec.testrunner.runner import AbstractRunner, BuildFailedException
+from pyexec.testrunner.runner import AbstractRunner
 from pyexec.testrunner.runners.pytestrunner import PytestRunner
 from pyexec.testrunner.runresult import CoverageResult, TestResult
 from pyexec.util.dependencies import Dependencies
@@ -205,6 +206,10 @@ class Miner:
                         info.dockerimage_build = False
                     except ValueError:
                         self.__logger.error("Cound not parse test execution results")
+                else:
+                    info.dockerimage_build = self.__test_dockerfile_builds(
+                        info.dockerfile, tmpdir, projectdir.name
+                    )
 
         except PermissionError:
             pass
@@ -216,6 +221,20 @@ class Miner:
             Note: Creating a temporary directory in the (user owned) home folder does not solve
             this problem.
             """
+
+    def __test_dockerfile_builds(
+        self, dependencies: Dependencies, tmp_dir: Path, project_name: str
+    ) -> bool:
+        tag = "pyexec/{}".format(project_name.lower())
+        docker = DockerTools(dependencies, tmp_dir, tag, self.__logfile)
+        docker.remove_image()
+        docker.write_dockerfile()
+        try:
+            docker.build_image()
+            docker.remove_image()
+            return True
+        except BuildFailedException:
+            return False
 
     def _run_v2(self, projectdir: Path) -> Optional[Dependencies]:
         inferdockerfile = InferDockerfile(projectdir, self.__logfile)
