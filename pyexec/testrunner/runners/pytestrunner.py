@@ -52,6 +52,9 @@ class PytestRunner(AbstractRunner):
             )
         self._add_dependencies()
         out, err = self._run(timeout)
+        if "(no-data-collected)" in err:
+            self._logger.error("Coverage: No data collected")
+            raise ValueError("Coverage: No data collected")
         return self._extract_run_results(out)
 
     def _add_dependencies(self) -> None:
@@ -142,7 +145,7 @@ class PytestRunner(AbstractRunner):
             )
 
         if test_result is None or coverage_result is None:
-            self._logger.debug(
+            self._logger.error(
                 "Unexpected output format of pytest and pytest-cov:\n{}".format(log)
             )
             raise ValueError("Unexpected output format of pytest and pytest-cov")
