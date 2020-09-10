@@ -7,7 +7,7 @@ from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependen
 
 class InferFromRequirementstxt(InferExtraDependencies):
     _deps_regex: Pattern = re.compile(
-        r"""^(?P<name>[\d\w]+[\d\w._-]+)(?:\[(?:[\d\w._-]+,? ?)+\])?(?: ?[<=>]+ ?(?P<version>[\d\w._-]+(?:\.\*)?)(?:,? ?<=? ?[\d\w._-]+)?)?$"""
+        r"""^["']?(?P<name>[\d\w]+[\d\w._-]+)(?:\[(?:[\d\w._-]+,? ?)+\])?["']?(?: ?~?[<=>]+ ?(?P<version>[\d\w._-]+(?:\.\*)?)(?:,? ?[<>]=? ?[\d\w._-]+)?)?$"""
     )
 
     def __init__(self, file_path: Path, logfile: Optional[Path] = None) -> None:
@@ -18,10 +18,14 @@ class InferFromRequirementstxt(InferExtraDependencies):
 
     def infer_dependencies(self) -> Dict[str, Optional[str]]:
         lines = self._file_content.splitlines()
+        formatted = list()
         result: Dict[str, Optional[str]] = dict()
         for line in lines:
-            line = line.split("#", 1)[0]
-            line = line.strip()
+            line = line.split("#", 1)[0]  # Ignore Comments
+            formatted.extend(line.split(";"))
+        formatted = [line.strip() for line in formatted]
+
+        for line in formatted:
             if line == "":
                 continue
             match = self._deps_regex.match(line)
