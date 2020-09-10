@@ -2,6 +2,7 @@ import pickle
 import re
 import sys
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -142,6 +143,7 @@ class Miner:
                         break
                     except Exception as e:
                         self.__logger.error("Caught unknown exception: {}".format(e))
+                        traceback.print_exception(type(e), e, e.__traceback__)
                         continue
         except PermissionError:
             self.__logger.error(
@@ -242,13 +244,14 @@ class Miner:
             return inferdockerfile.infer_dockerfile()
         except InferDockerfile.NoEnvironmentFoundException:
             self.__logger.info(
-                "No environment found for package {}".format(projectdir.name)
+                "V2: No environment found for package {}".format(projectdir.name)
             )
         except InferDockerfile.TimeoutException:
             self.__logger.info("v2 timed out on package {}".format(projectdir.name))
         return None
 
     def _get_extra_dependencies(self, projectdir: Path) -> Optional[Dependencies]:
+        self.__logger.debug("Getting extra dependencies")
         extra = ExtraDependencies(projectdir, self.__logfile)
         deps = extra.get_extra_dependencies()
         if deps:

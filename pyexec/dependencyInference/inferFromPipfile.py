@@ -8,7 +8,7 @@ from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependen
 class InferFromPipfile(InferExtraDependencies):
     _section_regex: Pattern = re.compile(r"""^\[+(?P<section>[\w\d._-]+)\]+$""")
     _version_regex: Pattern = re.compile(
-        r"""^(?P<name>[\w\d._-]+) ?(?:= ?['"]?(?:[<=>]+ ?(?P<version>[\d\w._-]+)(?:,? ?<=? ?[\d\w._-]+(?:\.\*)?)?| ?\* ?) ?["']?)?$"""
+        r"""^(?P<name>[\w\d._-]+) ?(?:= ?['"]?(?:~?[<=>]+ ?(?P<version>[\d\w._-]+)(?:,? ?<=? ?[\d\w._-]+(?:\.\*)?)?| ?\* ?) ?["']?)?$"""
     )
 
     def __init__(self, file_path: Path, logfile: Optional[Path]) -> None:
@@ -19,9 +19,16 @@ class InferFromPipfile(InferExtraDependencies):
 
     def infer_dependencies(self) -> Dict[str, Optional[str]]:
         sections = self._find_sections()
-        if sections["packages"] is None:
+        deps: List[str] = list()
+        found_section: bool = False
+        for section in ["packages", "dev-packages"]:
+            if section in sections and sections[section] is not None:
+                found_section = True
+                deps = deps + sections[section]
+        if not found_section:
+            self._logger.warning("Found no package section in Pipfile")
             return dict()
-        deps: List[str] = sections["packages"]
+
         result: Dict[str, Optional[str]] = dict()
         for line in deps:
             match = self._version_regex.match(line)
