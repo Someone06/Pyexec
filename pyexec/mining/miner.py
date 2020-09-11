@@ -3,7 +3,6 @@ import re
 import sys
 import time
 import traceback
-from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional, Tuple
@@ -16,49 +15,15 @@ from plumbum.cmd import grep, sed, shuf, wget
 from pyexec.dependencyInference.extraDependencies import ExtraDependencies
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
 from pyexec.dockerTools.dockerTools import BuildFailedException, DockerTools
-from pyexec.mining.githubrequest import (
-    GitHubInfo,
-    GitHubRequest,
-    GitHubRequestException,
-)
-from pyexec.mining.gitrequest import GitRequest, RepoInfo
+from pyexec.mining.githubrequest import GitHubRequest, GitHubRequestException
+from pyexec.mining.gitrequest import GitRequest
+from pyexec.mining.packageInfo import PackageInfo
 from pyexec.mining.pypirequest import PyPIRequest
 from pyexec.testrunner.runner import AbstractRunner
 from pyexec.testrunner.runners.pytestrunner import PytestRunner
-from pyexec.testrunner.runresult import CoverageResult, TestResult
+from pyexec.util.csv import CSV
 from pyexec.util.dependencies import Dependencies
 from pyexec.util.logging import get_logger
-
-
-@dataclass
-class PackageInfo:
-    name: str
-    project_on_pypi: bool = False
-    github_repo: Optional[Tuple[str, str]] = None
-    github_repo_exists: bool = False
-    dockerfile: Optional[Dependencies] = None
-    dockerfile_source: Optional[str] = None
-    dockerimage_build: bool = False
-    testcase_count: Optional[int] = None
-    test_result: Optional[Tuple[TestResult, CoverageResult]] = None
-    github_info: Optional[GitHubInfo] = None
-    repo_info: Optional[RepoInfo] = None
-
-    @property
-    def has_testsuit(self) -> bool:
-        return self.testcase_count is not None
-
-    @property
-    def testsuit_executed(self) -> bool:
-        return self.has_testsuit and self.dockerimage_build
-
-    @property
-    def testsuit_result_parsed(self) -> bool:
-        return self.test_result is not None
-
-    @property
-    def github_link_found(self) -> bool:
-        return self.github_repo is not None
 
 
 class Miner:
@@ -356,6 +321,9 @@ class PyexecMiner:
             self.__package_list, self.__github_token, output_dir.joinpath("log.txt")
         )
         result = miner.mine()
+
+        csv = CSV()
+        csv.write(csv.to_stats(result), output_dir.joinpath("stats.csv"))
 
         with open(output_dir.joinpath("pickled_data"), "wb") as p:
             pickle.dump(result, p)

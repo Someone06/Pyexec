@@ -8,7 +8,7 @@ from scipy.stats import mannwhitneyu as mwy
 
 from pyexec.mining.githubrequest import GitHubInfo
 from pyexec.mining.gitrequest import RepoInfo
-from pyexec.mining.miner import PackageInfo
+from pyexec.mining.packageInfo import PackageInfo
 from pyexec.util.logging import get_logger
 
 
