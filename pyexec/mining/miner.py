@@ -165,7 +165,6 @@ class Miner:
                     tmpdir, projectdir.name, info.dockerfile, self.__logfile
                 )
                 if runner.is_used_in_project():
-                    info.testcase_count = runner.get_test_count()
                     try:
                         info.dockerimage_build = True
                         info.test_result = runner.run()
