@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependencies
 from pyexec.dependencyInference.inferFromPipfile import InferFromPipfile
@@ -21,19 +21,19 @@ class ExtraDependencies:
         else:
             self._project_path = project_path
 
-    def get_extra_dependencies(self) -> Dict[str, Optional[str]]:
+    def get_extra_dependencies(self) -> Tuple[Dict[str, Optional[str]], str]:
         result: Dict[str, Optional[str]] = dict()
         pipfile = self._project_path.joinpath("Pipfile")
         if pipfile.exists() and pipfile.is_file():
             inferer: InferExtraDependencies = InferFromPipfile(pipfile, self._logfile)
             result = inferer.infer_dependencies()
             if len(result.items()) > 0:
-                return result
+                return result, "Pipfile"
         requirementstxt = self._project_path.joinpath("requirements.txt")
         if requirementstxt.exists() and requirementstxt.is_file():
             inferer = InferFromRequirementstxt(requirementstxt, self._logfile)
             self._merge_dict(result, inferer.infer_dependencies())
-        return result
+        return result, "v2"
 
     @staticmethod
     def _merge_dict(

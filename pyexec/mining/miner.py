@@ -151,15 +151,16 @@ class Miner:
                     info.testcase_count = count_runner.get_test_count()
 
                 info.dockerfile = self._run_v2(projectdir)
-                if not info.dockerfile:
-                    info.dockerfile = self._get_extra_dependencies(projectdir)
-                    if info.dockerfile is None:
-                        return
-                    else:
-                        info.dockerfile_source = "Extras"
+                if info.dockerfile is not None:
+                    info.dockerfile_source = "v2"
                 else:
-                    info.dockerfile_source = "V2"
+                    deps = self._get_extra_dependencies(projectdir)
+                    if deps is not None:
+                        info.dockerfile_source = deps[1]
+                        info.dockerfile = deps[0]
 
+                if not info.dockerfile:
+                    return
                 self.__logger.debug("Found dependencies")
                 runner: AbstractRunner = PytestRunner(
                     tmpdir, projectdir.name, info.dockerfile, self.__logfile
@@ -214,16 +215,18 @@ class Miner:
             self.__logger.info("v2 timed out on package {}".format(projectdir.name))
         return None
 
-    def _get_extra_dependencies(self, projectdir: Path) -> Optional[Dependencies]:
+    def _get_extra_dependencies(
+        self, projectdir: Path
+    ) -> Optional[Tuple[Dependencies, str]]:
         self.__logger.debug("Getting extra dependencies")
         extra = ExtraDependencies(projectdir, self.__logfile)
-        deps = extra.get_extra_dependencies()
+        deps, source = extra.get_extra_dependencies()
         if deps:
             df = Dependencies("FROM python:3.8")
             for name, version in deps.items():
                 df.add_pip_dependency(name, version)
             self.__logger.debug("Found extra dependencies")
-            return df
+            return df, source
         else:
             self.__logger.debug("Found no extra dependencies")
             return None

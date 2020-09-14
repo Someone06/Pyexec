@@ -27,7 +27,9 @@ class PyexecStats:
     average_complexity: float
     min_python_version: int
     dockerfile_found: bool
-    dockerfile_source_is_v2: bool
+    dockerfile_source: str
+    pip_dependency_count: int
+    apt_dependency_count: int
     dockerimage_build_success: bool
     testcase_count: int
     testsuit_executed: bool
@@ -103,7 +105,19 @@ class CSV:
                 else info.repo_info.min_python_version
             )
             dockerfile_found = info.dockerfile is not None
-            dockerfile_source_is_v2 = info.dockerfile_source == "V2"
+            dockerfile_source = (
+                "None" if info.dockerfile_source is None else info.dockerfile_source
+            )
+            pip_dependency_count = (
+                -1
+                if info.dockerfile is None
+                else info.dockerfile.pip_dependency_count()
+            )
+            apt_dependency_count = (
+                -1
+                if info.dockerfile is None
+                else info.dockerfile.apt_dependency_count()
+            )
             dockerimage_build_success = info.dockerimage_build
             testcase_count = -1 if info.testcase_count is None else info.testcase_count
             testsuit_executed = info.testsuit_executed
@@ -149,7 +163,9 @@ class CSV:
                 average_complexity,
                 min_python_version,
                 dockerfile_found,
-                dockerfile_source_is_v2,
+                dockerfile_source,
+                pip_dependency_count,
+                apt_dependency_count,
                 dockerimage_build_success,
                 testcase_count,
                 testsuit_executed,
