@@ -53,8 +53,6 @@ class DockerTools:
             run_command = docker["run", "--rm", self.__image_tag]
 
         ret, out, err = run_command.run(retcode=None)
-        print(out)
-        print(err)
         if (
             timeout is not None and ret == 124
         ):  # Timeout was triggered, see 'man timeout'
