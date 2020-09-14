@@ -13,7 +13,7 @@ class Dependencies:
 
     __from_regex: Pattern = re.compile(r"""^FROM python:(?P<version>[\d.]+)$""")
     __apt_install_regex: Pattern = re.compile(
-        r"""^RUN \["apt-get", ?"install", ?(?:"-y", ?)?"(?P<name>[\w\d._-]+) ?(?:= ?(?P<version>[\d\w._+:~-]+))?"\]$"""
+        r"""^RUN \["apt-get", ?"install", ?(?:"-y", ?)?"(?P<name>[\w\d._+:~-]+) ?(?:= ?(?P<version>[\d\w._+:~-]+))?"\]$"""
     )
     __pip_install_regex: Pattern = re.compile(
         r"""^RUN \["pip", ?"install", ?"(?P<name>[\w\d._-]+) ?(?:== ?(?P<version>[\d\w._+:~-]+))?"\]$"""
