@@ -18,3 +18,9 @@ class InferExtraDependencies(ABC):
     @abstractmethod
     def infer_dependencies(self) -> Dict[str, Optional[str]]:
         raise NotImplementedError("Implement infer_dependencies()")
+
+    def _add_dependencies(
+        self, deps: Dict[str, Optional[str]], name: str, version: Optional[str]
+    ) -> None:
+        if name not in deps or deps[name] is None:
+            deps[name] = version

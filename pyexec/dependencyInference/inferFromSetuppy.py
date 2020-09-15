@@ -34,8 +34,7 @@ class InferFromSetuppy(InferExtraDependencies):
         for match in matches:
             name = match[0]
             version = match[1]
-            if name not in result or result[name] is None:
-                result[name] = version
+            self._add_dependencies(result, name, version)
         return result
 
     def _filter_setup_call(self) -> Optional[str]:

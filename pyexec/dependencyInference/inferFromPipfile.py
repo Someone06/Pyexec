@@ -38,8 +38,7 @@ class InferFromPipfile(InferExtraDependencies):
             else:
                 name = match.group("name")
                 version = match.group("version")
-                if name not in result or result[name] is None:
-                    result[name] = version
+                self._add_dependencies(result, name, version)
         return result
 
     def _find_sections(self) -> Dict[str, List[str]]:
