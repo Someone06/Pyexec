@@ -25,7 +25,7 @@ class PytestRunner(AbstractRunner):
         r"|"
         r" no tests? ran"
         r")"
-        r" in (?P<time>[\d.]+) ?s(?:econds?)? =+\s*"
+        r" in (?P<time>[\d.]+) ?s(?:econds?)?(?: ?\(\d+:\d+:\d+\))? =+\s*"
     )
     _coverage_regex: Pattern = re.compile(
         r'\s*"totals": \{\s*'
