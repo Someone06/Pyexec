@@ -4,6 +4,7 @@ from typing import Dict, Optional, Tuple
 from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependencies
 from pyexec.dependencyInference.inferFromPipfile import InferFromPipfile
 from pyexec.dependencyInference.inferFromRequirementstxt import InferFromRequirementstxt
+from pyexec.dependencyInference.inferFromSetuppy import InferFromSetuppy
 from pyexec.util.logging import get_logger
 
 
@@ -29,11 +30,21 @@ class ExtraDependencies:
             result = inferer.infer_dependencies()
             if len(result.items()) > 0:
                 return result, "Pipfile"
+
+        setuppy = self._project_path.joinpath("setup.py")
+        if setuppy.exists() and setuppy.is_file():
+            inferer = InferFromSetuppy(setuppy, self._logfile)
+            self._merge_dict(result, inferer.infer_dependencies())
+            if len(result.items()) > 0:
+                return result, "setup.py"
+
         requirementstxt = self._project_path.joinpath("requirements.txt")
         if requirementstxt.exists() and requirementstxt.is_file():
             inferer = InferFromRequirementstxt(requirementstxt, self._logfile)
             self._merge_dict(result, inferer.infer_dependencies())
-        return result, "requirements.txt"
+            if len(result.items()) > 0:
+                return result, "requirements.txt"
+        return dict(), "None"
 
     @staticmethod
     def _merge_dict(
