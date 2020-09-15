@@ -33,7 +33,7 @@ class ExtraDependencies:
         if requirementstxt.exists() and requirementstxt.is_file():
             inferer = InferFromRequirementstxt(requirementstxt, self._logfile)
             self._merge_dict(result, inferer.infer_dependencies())
-        return result, "v2"
+        return result, "requirements.txt"
 
     @staticmethod
     def _merge_dict(
