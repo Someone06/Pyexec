@@ -90,10 +90,7 @@ class PytestRunner(AbstractRunner):
     def get_test_count(self) -> Optional[int]:
         if self.is_used_in_project():
             cmd = sh[
-                "-c",
-                r"""find """
-                + str(self._project_path)
-                + r""" -type f -name 'test*.py' -exec grep -e 'def test_' '{}' \; | wc -l""",
+                "-c", r"egrep -e 'def test_' -r {} | wc -l".format(self._project_path)
             ]
             _, count, _ = cmd.run(retcode=None)
             try:
