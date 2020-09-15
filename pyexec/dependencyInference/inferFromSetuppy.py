@@ -8,7 +8,7 @@ from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependen
 class InferFromSetuppy(InferExtraDependencies):
     _setup_call_regex: Pattern = re.compile(r"""^setup[([]""")
     _dependency_regex: Pattern = re.compile(
-        r"""(?:['"](P<name>[\d\w]+[\d\w._-]*)(?: ?[<=>]+ ?((P<version>[\d\w._-]+)(?:\.\*)?)(?:,? ?[<>]=? ?[\d\w._-]+)?)?['"], ?)*"""
+        r"""['"](?P<name>[\d\w._-]+)(?: ?[<=>]+ ?(?:(?P<version>[\d\w._-]+)(?:\.\*)?)(?:,? ?[<>]=? ?[\d\w._-]+)?)?['"]"""
     )
 
     def __init__(self, file_path: Path, logfile: Optional[Path] = None) -> None:
@@ -28,16 +28,12 @@ class InferFromSetuppy(InferExtraDependencies):
         if deps_list is None:
             return dict()
         deps_list = deps_list.replace("\n", " ")
-        matches = self._setup_call_regex.findall(deps_list)
+        matches = self._dependency_regex.findall(deps_list)
+        self._logger.debug("Found setup.py matches: {}".format(matches))
         result: Dict[str, Optional[str]] = dict()
         for match in matches:
-            m = self._setup_call_regex.match(match)
-            if m is None:
-                self._logger.warning("Did not match dependency: {}".format(match))
-                return dict()
-
-            name = m.group("name")
-            version = m.group("version")
+            name = match[0]
+            version = match[1]
             if name not in result or result[name] is None:
                 result[name] = version
         return result
@@ -72,4 +68,4 @@ class InferFromSetuppy(InferExtraDependencies):
         if index == -1:
             return None
         else:
-            return to_match[1 : (index - 1)]
+            return to_match[1:index]
