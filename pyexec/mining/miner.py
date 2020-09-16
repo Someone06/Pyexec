@@ -1,4 +1,3 @@
-import pickle
 import re
 import sys
 import time
@@ -326,9 +325,6 @@ class PyexecMiner:
 
         csv = CSV()
         csv.write(csv.to_stats(result), output_dir.joinpath("stats.csv"))
-
-        with open(output_dir.joinpath("pickled_data"), "wb") as p:
-            pickle.dump(result, p)
 
         with open(output_dir.joinpath("output.txt"), "w") as f:
             f.write("\n".join(str(e) for e in result))

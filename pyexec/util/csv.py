@@ -1,4 +1,3 @@
-import csv
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +23,7 @@ class PyexecStats:
     has_makefile: bool
     has_pipfile: bool
     loc: int
+    num_files: int
     average_complexity: float
     min_python_version: int
     dockerfile_found: bool
@@ -94,6 +94,11 @@ class CSV:
                 if info.repo_info is None or info.repo_info.loc is None
                 else info.repo_info.loc
             )
+            num_files = (
+                -1
+                if info.repo_info is None or info.repo_info.num_files is None
+                else info.repo_info.num_files
+            )
             average_complexity = (
                 -1
                 if info.repo_info is None or info.repo_info.average_complexity is None
@@ -160,6 +165,7 @@ class CSV:
                 has_makefile,
                 has_pipfile,
                 loc,
+                num_files,
                 average_complexity,
                 min_python_version,
                 dockerfile_found,
@@ -191,10 +197,3 @@ class CSV:
         toCSV = [asdict(s) for s in stats]
         frame = pd.DataFrame(toCSV)
         frame.to_csv(csv_file)
-
-    def read(self, csv_file: Path) -> List[PyexecStats]:
-        if not csv_file.exists() or not csv_file.is_file():
-            raise ValueError("Passed CSV file does not exist")
-        with open(csv_file, "r") as data:
-            dicts = list(csv.DictReader(data))
-        return [PyexecStats(**s) for s in dicts]  # type: ignore

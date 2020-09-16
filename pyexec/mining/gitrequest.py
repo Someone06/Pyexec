@@ -23,6 +23,7 @@ class RepoInfo:
     has_makefile: bool
     has_pipfile: bool
     loc: Optional[int]
+    num_files: Optional[int]
     average_complexity: Optional[float]
     min_python_version: Optional[int]
 
@@ -111,6 +112,7 @@ class GitRequest:
             has_makefile=self.__has_makefile,
             has_pipfile=self.__has_pipfile,
             loc=self.__num_lines,
+            num_files=self.__num_files,
             average_complexity=self.__average_complexity(path),
             min_python_version=self.__min_python_version(path),
         )
