@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from pyexec.dependencyInference.inferDependencys import InferDockerfile
+from pyexec.util.exceptions import TimeoutException
 
 
 @pytest.mark.slow
@@ -22,7 +23,7 @@ def test_test_runner():
 
 
 def test_test_runner_timeout():
-    with pytest.raises(InferDockerfile.TimeoutException):
+    with pytest.raises(TimeoutException):
         id: InferDockerfile = InferDockerfile(Path("/home/michael/test-runner"))
         result = id.infer_dockerfile(3)
         print(result)

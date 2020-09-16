@@ -22,6 +22,7 @@ from pyexec.testrunner.runner import AbstractRunner
 from pyexec.testrunner.runners.pytestrunner import PytestRunner
 from pyexec.util.csv import CSV
 from pyexec.util.dependencies import Dependencies
+from pyexec.util.exceptions import TimeoutException
 from pyexec.util.logging import get_logger
 
 
@@ -210,7 +211,7 @@ class Miner:
             self.__logger.info(
                 "V2: No environment found for package {}".format(projectdir.name)
             )
-        except InferDockerfile.TimeoutException:
+        except TimeoutException:
             self.__logger.info("v2 timed out on package {}".format(projectdir.name))
         return None
 

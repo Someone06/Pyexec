@@ -5,6 +5,11 @@ from typing import List, Optional
 from plumbum.cmd import find, sed, timeout, v2
 
 from pyexec.util.dependencies import Dependencies
+from pyexec.util.exceptions import (
+    DirectoryNotFoundException,
+    NotADirectoryException,
+    TimeoutException,
+)
 from pyexec.util.logging import get_logger
 
 
@@ -12,22 +17,13 @@ class InferDockerfile:
     class NoEnvironmentFoundException(Exception):
         pass
 
-    class DirectoryNotFoundException(Exception):
-        pass
-
-    class NotADirectoryException(Exception):
-        pass
-
-    class TimeoutException(Exception):
-        pass
-
     def __init__(self, project_path: Path, logfile: Optional[Path] = None) -> None:
         if not Path.exists(project_path):
-            raise InferDockerfile.DirectoryNotFoundException(
+            raise DirectoryNotFoundException(
                 "There is no file or directory named {}".format(project_path)
             )
         elif not Path.is_dir(project_path):
-            raise InferDockerfile.NotADirectoryException(
+            raise NotADirectoryException(
                 "The project path {} is not a directory".format(project_path)
             )
         else:
@@ -86,9 +82,7 @@ class InferDockerfile:
                     self.__logger.info(
                         "Timed out on project {}".format(self.__project_path.name)
                     )
-                    raise InferDockerfile.TimeoutException(
-                        "Timed out on file {}".format(f)
-                    )
+                    raise TimeoutException("Timed out on file {}".format(f))
             else:
                 df = self.__execute_v2(f)
 
@@ -184,9 +178,7 @@ class InferDockerfile:
             self.__logger.info(
                 "Timed out on project {}".format(self.__project_path.name)
             )
-            raise InferDockerfile.TimeoutException(
-                "V2 timed out on file {}".format(file_path.name)
-            )
+            raise TimeoutException("V2 timed out on file {}".format(file_path.name))
 
         lines = out.splitlines()
         if len(lines) >= 1 and lines[0].startswith("FROM python:"):
