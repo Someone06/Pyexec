@@ -17,7 +17,9 @@ class InferDockerfile:
     class NoEnvironmentFoundException(Exception):
         pass
 
-    def __init__(self, project_path: Path, logfile: Optional[Path] = None) -> None:
+    def __init__(
+        self, project_path: Path, project_name: str, logfile: Optional[Path] = None
+    ) -> None:
         if not Path.exists(project_path):
             raise DirectoryNotFoundException(
                 "There is no file or directory named {}".format(project_path)
@@ -28,6 +30,7 @@ class InferDockerfile:
             )
         else:
             self.__project_path = project_path
+            self.__project_name = project_name
             self.__python_path = (
                 find[
                     self.__project_path,
@@ -142,6 +145,7 @@ class InferDockerfile:
     def __execute_v2(
         self, file_path: Path, tout: Optional[int] = None
     ) -> Optional[Dependencies]:
+        print("Excluding {}".format(self.__project_name))
         if tout is not None:
             command = timeout[
                 tout,
@@ -163,7 +167,7 @@ class InferDockerfile:
                 "--environment",
                 "PYTHONPATH={}".format(self.__python_path),
                 "--exclude",
-                self.__project_path.name.lower(),
+                self.__project_name,
                 file_path,
             ]
 

@@ -150,7 +150,7 @@ class Miner:
                     self.__logger.debug("Pytest is used!")
                     info.testcase_count = count_runner.get_test_count()
 
-                info.dockerfile = self._run_v2(projectdir)
+                info.dockerfile = self._run_v2(projectdir, info.name)
                 if info.dockerfile is not None:
                     info.dockerfile_source = "v2"
                 else:
@@ -203,8 +203,8 @@ class Miner:
         except BuildFailedException:
             return False
 
-    def _run_v2(self, projectdir: Path) -> Optional[Dependencies]:
-        inferdockerfile = InferDockerfile(projectdir, self.__logfile)
+    def _run_v2(self, projectdir: Path, project_name: str) -> Optional[Dependencies]:
+        inferdockerfile = InferDockerfile(projectdir, project_name, self.__logfile)
         try:
             return inferdockerfile.infer_dockerfile()
         except InferDockerfile.NoEnvironmentFoundException:
