@@ -8,7 +8,7 @@ from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependen
 class InferFromSetuppy(InferExtraDependencies):
     _setup_call_regex: Pattern = re.compile(r"""^setup[([]""")
     _dependency_regex: Pattern = re.compile(
-        r"""['"](?P<name>[\d\w._-]+)(?: ?[<=>]+ ?(?:(?P<version>[\d\w._-]+)(?:\.\*)?)(?:,? ?[<>]=? ?[\d\w._-]+)?)?['"]"""
+        r"""['"](?P<name>[\d\w._-]+)(?: ?[<=>]+ ?(?:(?P<version>[\d\w._-]+(?:\.\*)?))(?:,? ?[<>]=? ?[\d\w._-]+)?)?['"]"""
     )
 
     def __init__(self, file_path: Path, logfile: Optional[Path] = None) -> None:
@@ -32,9 +32,9 @@ class InferFromSetuppy(InferExtraDependencies):
         self._logger.debug("Found setup.py matches: {}".format(matches))
         result: Dict[str, Optional[str]] = dict()
         for match in matches:
-            name = match[0]
-            version = match[1]
-            self._add_dependencies(result, name, version)
+            name = match[0].strip()
+            version = match[1].strip()
+            self._add_dependencies(result, name, version if version != "" else None)
         return result
 
     def _filter_setup_call(self) -> Optional[str]:

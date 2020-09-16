@@ -20,7 +20,7 @@ class DockerTools:
         image_tag: str,
         logfile: Optional[Path] = None,
     ) -> None:
-        self.__logger = get_logger("Pyexec::DockerTools")
+        self.__logger = get_logger("Pyexec::DockerTools", logfile)
         self.__dependencies = dependencies
         self.__image_tag = image_tag
         self.__context = context
