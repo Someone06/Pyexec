@@ -160,10 +160,6 @@ class Dependencies:
         instance.__cmd_command = cmds[0] if len(cmds) > 0 else None
         return instance
 
-    def add_run_command(self, cmd: str) -> None:
-        if not self.__parse_run_command(cmd):
-            raise Dependencies.InvalidFormatException("Argument is no valid RUN clause")
-
     def set_copy_command(self, cmd: str, *, replace: bool = True) -> None:
         if not cmd.startswith("COPY"):
             raise Dependencies.InvalidFormatException(
