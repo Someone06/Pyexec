@@ -25,6 +25,7 @@ class PyexecStats:
     loc: int
     num_files: int
     num_impl_files: int
+    num_test_files: int
     average_complexity: float
     min_python_version: int
     dockerfile_found: bool
@@ -105,6 +106,11 @@ class CSV:
                 if info.repo_info is None or info.repo_info.num_impl_files is None
                 else info.repo_info.num_impl_files
             )
+            num_test_files = (
+                -1
+                if info.repo_info is None or info.repo_info.num_test_files is None
+                else info.repo_info.num_test_files
+            )
             average_complexity = (
                 -1
                 if info.repo_info is None or info.repo_info.average_complexity is None
@@ -173,6 +179,7 @@ class CSV:
                 loc,
                 num_files,
                 num_impl_files,
+                num_test_files,
                 average_complexity,
                 min_python_version,
                 dockerfile_found,
