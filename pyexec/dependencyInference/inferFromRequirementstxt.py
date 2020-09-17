@@ -9,6 +9,9 @@ class InferFromRequirementstxt(InferExtraDependencies):
     _deps_regex: Pattern = re.compile(
         r"""^["']?(?P<name>[\d\w]+[\d\w._-]+)(?:\[(?:[\d\w._-]+,? ?)+\])?["']?(?: ?~?[<=>]+ ?(?P<version>[\d\w._-]+(?:\.\*)?)(?:,? ?[<>]=? ?[\d\w._-]+)?)?$"""
     )
+    _python_version_regex = re.compile(
+        r"""^["']?python_version["']? ?[<=>]+ ?["']?[\d.]+(?:\.\*)?["']?$"""
+    )
 
     def __init__(self, file_path: Path, logfile: Optional[Path] = None) -> None:
         super().__init__(file_path, logfile)
@@ -30,8 +33,10 @@ class InferFromRequirementstxt(InferExtraDependencies):
                 continue
             match = self._deps_regex.match(line)
             if match is None:
-                self._logger.warning("Did not match line: {}".format(line))
-                return dict()
+                match = self._python_version_regex.match(line)
+                if match is None:
+                    self._logger.warning("Did not match line: {}".format(line))
+                    return dict()
             else:
                 name = match.group("name")
                 version = match.group("version")

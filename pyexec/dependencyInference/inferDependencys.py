@@ -145,7 +145,6 @@ class InferDockerfile:
     def __execute_v2(
         self, file_path: Path, tout: Optional[int] = None
     ) -> Optional[Dependencies]:
-        print("Excluding {}".format(self.__project_name))
         if tout is not None:
             command = timeout[
                 tout,

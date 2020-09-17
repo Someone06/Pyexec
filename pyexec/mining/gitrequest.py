@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import git
 from git import Blob, Commit, Repo, TagObject, Tree
-from plumbum.cmd import awk, cloc, grep, radon, tail, tr
+from plumbum.cmd import awk, cloc, find, grep, radon, tail, tr, wc
 from pydriller import RepositoryMining
 from pydriller.domain.commit import Modification
 
@@ -24,6 +24,7 @@ class RepoInfo:
     has_pipfile: bool
     loc: Optional[int]
     num_files: Optional[int]
+    num_impl_files: Optional[int]
     average_complexity: Optional[float]
     min_python_version: Optional[int]
 
@@ -67,6 +68,7 @@ class GitRequest:
         self.__commits: Dict[str, Dict[str, Any]] = dict()
         self.__num_lines = -1
         self.__num_files = -1
+        self.__num_impl_files: Optional[int] = None
         self.__num_commits = -1
         self.__head_commit = None
         self.__test_frameworks: Optional[Set[str]] = None
@@ -97,6 +99,7 @@ class GitRequest:
         cloc_stats = self.__get_cloc_stats(path)
         if cloc_stats is not None:
             self.__num_files, self.__num_lines = cloc_stats
+        self.__num_impl_files = self.__impl_files(path)
         # self.__head_commit = repo.head.commit
         # self.__test_frameworks = self.__detect_test_frameworks(path)
         #        self._test_run_results = self._extract_test_run_results(path)
@@ -112,6 +115,7 @@ class GitRequest:
             has_makefile=self.__has_makefile,
             has_pipfile=self.__has_pipfile,
             loc=self.__num_lines,
+            num_impl_files=self.__num_impl_files,
             num_files=self.__num_files,
             average_complexity=self.__average_complexity(path),
             min_python_version=self.__min_python_version(path),
@@ -150,6 +154,41 @@ class GitRequest:
             return float(out)
         except ValueError:
             self.__logger.error("Error computing average cyclomatic complexity")
+            return None
+
+    def __impl_files(self, project_dir: Path) -> Optional[int]:
+        command = (
+            find[
+                project_dir,
+                "-type",
+                "f",
+                "-name",
+                "*.py",
+                "-not",
+                "-path",
+                "*/__pycache__*",
+                "-not",
+                "-path",
+                "*/doc*",
+                "-not",
+                "-path",
+                "*/example*",
+                "-not",
+                "-path",
+                "*/.git*",
+                "-not",
+                "-name",
+                "setup.py",
+                "-not",
+                "-name",
+                "__init__.py",
+            ]
+            | wc["-l"]
+        )
+        _, out, _ = command.run(retcode=None)
+        try:
+            return int(out)
+        except ValueError:
             return None
 
     @property
