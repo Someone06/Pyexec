@@ -34,7 +34,10 @@ class InferFromSetuppy(InferExtraDependencies):
         for match in matches:
             name = match[0].strip()
             version = match[1].strip()
-            self._add_dependencies(result, name, version if version != "" else None)
+            if name == "requirements.txt":
+                return dict()
+            else:
+                self._add_dependencies(result, name, version if version != "" else None)
         return result
 
     def _filter_setup_call(self) -> Optional[str]:

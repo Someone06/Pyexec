@@ -10,9 +10,14 @@ class InferFromPipfile(InferExtraDependencies):
     _version_regex: Pattern = re.compile(
         r"""^['"]?(?P<name>[\w\d._-]+)["']? ?(?:= ?['"]?(?:~?[<=>]+ ?(?P<version>[\d\w._-]+(?:\.\*)?(?:,? ?<=? ?[\d\w._-]+(?:\.\*)?)?)| ?\* ?) ?["']?)?$"""
     )
+    _self_install_regex = re.compile(r"""^(?P<name>[\w\d._-]+) ?= ?\{.*\}$""")
 
-    def __init__(self, file_path: Path, logfile: Optional[Path]) -> None:
+    def __init__(
+        self, file_path: Path, project_name: str, logfile: Optional[Path]
+    ) -> None:
         super().__init__(file_path, logfile)
+        self._project_name = project_name
+        print("project name: {}".format(self._project_name))
         if file_path.name != "Pipfile":
             self._logger.error("File {} is not a Pipfile".format(file_path))
             raise ValueError("Wrong file name: {}".format(file_path.name))
@@ -33,8 +38,12 @@ class InferFromPipfile(InferExtraDependencies):
         for line in deps:
             match = self._version_regex.match(line)
             if match is None:
-                self._logger.warning("Did not match dependency string: {}".format(line))
-                return dict()
+                match = self._self_install_regex.match(line)
+                if match is None or match.group("name") != self._project_name:
+                    self._logger.warning(
+                        "Did not match dependency string: {}".format(line)
+                    )
+                    return dict()
             else:
                 name = match.group("name")
                 version = match.group("version")

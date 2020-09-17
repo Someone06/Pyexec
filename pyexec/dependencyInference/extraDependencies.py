@@ -26,7 +26,9 @@ class ExtraDependencies:
         result: Dict[str, Optional[str]] = dict()
         pipfile = self._project_path.joinpath("Pipfile")
         if pipfile.exists() and pipfile.is_file():
-            inferer: InferExtraDependencies = InferFromPipfile(pipfile, self._logfile)
+            inferer: InferExtraDependencies = InferFromPipfile(
+                pipfile, self._project_path.name, self._logfile
+            )
             result = inferer.infer_dependencies()
             if len(result.items()) > 0:
                 return result, "Pipfile"
