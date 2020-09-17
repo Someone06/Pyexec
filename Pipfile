@@ -28,6 +28,7 @@ pandas = "*"
 matplotlib = "*"
 numpy = "*"
 seaborn = "*"
+nbconvert = "*"
 
 [requires]
 python_version = "3.8"
