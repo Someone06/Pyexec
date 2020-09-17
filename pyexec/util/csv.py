@@ -19,6 +19,7 @@ class PyexecStats:
     github_repo_last_updated: datetime
     github_repo_active_days: int
     github_repo_age: int
+    has_setuppy: bool
     has_requirementstxt: bool
     has_makefile: bool
     has_pipfile: bool
@@ -81,6 +82,9 @@ class CSV:
                 -1
                 if info.github_info is None
                 else (datetime.today() - github_repo_created_at).days
+            )
+            has_setuppy = (
+                False if info.repo_info is None else info.repo_info.has_setuppy
             )
             has_requirementstxt = (
                 False if info.repo_info is None else info.repo_info.has_requirementstxt
@@ -173,6 +177,7 @@ class CSV:
                 github_repo_last_updated,
                 github_repo_active_days,
                 github_repo_age,
+                has_setuppy,
                 has_requirementstxt,
                 has_makefile,
                 has_pipfile,
