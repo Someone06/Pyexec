@@ -7,7 +7,7 @@ from pyexec.dependencyInference.inferExtraDependencies import InferExtraDependen
 
 class InferFromRequirementstxt(InferExtraDependencies):
     _deps_regex: Pattern = re.compile(
-        r"""^["']?(?P<name>[\d\w]+[\d\w._-]+)(?:\[(?:[\d\w._-]+,? ?)+\])?["']?(?: ?~?[<=>]+ ?(?P<version>[\d\w._-]+(?:\.\*)?)(?:,? ?[<>]=? ?[\d\w._-]+)?)?$"""
+        r"""^["']?(?P<name>[\d\w]+[\d\w._-]+)(?:\[(?:[\d\w._-]+,? ?)+\])?["']?(?: ?~?[<=>]+ ?(?P<version>[\d\w._-]+(?:\.\*)?)(?:,? ?[<>!]=? ?[\d\w._-]+)?)?$"""
     )
     _python_version_regex = re.compile(
         r"""^["']?python_version["']? ?[<=>]+ ?["']?[\d.]+(?:\.\*)?["']?$"""
