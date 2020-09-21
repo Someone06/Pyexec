@@ -4,7 +4,7 @@ import time
 import traceback
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
@@ -41,9 +41,8 @@ class Miner:
             r"(http[s]?://)?(www.)?github.com/([^/]*)/(.*)", re.IGNORECASE
         )
 
-    def mine(self) -> List[PackageInfo]:
+    def mine(self) -> Iterator[PackageInfo]:
         self.__logger.info("Starting to mine")
-        result: List[PackageInfo] = list()
 
         try:
             with TemporaryDirectory(prefix="pyexec-cache-") as d:
@@ -57,13 +56,13 @@ class Miner:
                             )
                         )
                         info = PackageInfo(name=p)
-                        result.append(info)
                         pypirequest = PyPIRequest(p, self.__logfile)
                         pypi_info = pypirequest.get_result_from_url()
                         if pypi_info is None:
                             self.__logger.warning(
                                 "No PyPI information found for package {}".format(p)
                             )
+                            yield info
                             continue
 
                         info.project_on_pypi = True
@@ -72,6 +71,7 @@ class Miner:
                             self.__logger.info(
                                 "No Github link found for package {}".format(p)
                             )
+                            yield info
                             continue
 
                         if self.__github_token is not None:
@@ -101,6 +101,7 @@ class Miner:
                             )
 
                         self.__checkout(tmpdir, gitrequest, info)
+                        yield info
                     except KeyboardInterrupt:
                         self.__logger.info(
                             "Caught keyboard interrupt. Stopped mining. Returning already mined results"
@@ -109,6 +110,7 @@ class Miner:
                     except Exception as e:
                         self.__logger.error("Caught unknown exception: {}".format(e))
                         traceback.print_exception(type(e), e, e.__traceback__)
+                        yield info
                         continue
         except PermissionError:
             self.__logger.error(
@@ -116,7 +118,7 @@ class Miner:
                     tmpdir
                 )
             )
-        return result
+        return None
 
     def __checkout(self, basedir: Path, request: GitRequest, info: PackageInfo):
         try:
@@ -265,6 +267,7 @@ class Miner:
 class PyexecMiner:
     def __init__(self, argv: List[str]) -> None:
         self.__parser = self.__create_parser()
+
         if len(argv) == 0:
             self.__parser.format_help()
             sys.exit(0)
@@ -322,20 +325,16 @@ class PyexecMiner:
         miner = Miner(
             self.__package_list, self.__github_token, output_dir.joinpath("log.txt")
         )
-        result = miner.mine()
 
+        stats_file_path = output_dir.joinpath("stats.csv")
+        output_file_path = output_dir.joinpath("output.txt")
         csv = CSV()
-        csv.write(csv.to_stats(result), output_dir.joinpath("stats.csv"))
-
-        with open(output_dir.joinpath("output.txt"), "w") as f:
-            f.write("\n".join(str(e) for e in result))
-
-        for r in result:
-            if r.dockerfile is not None:
-                with open(
-                    output_dir.joinpath("Dockerfile_{}".format(r.name)), "w"
-                ) as f:
-                    f.write(r.dockerfile.to_dockerfile())
+        write_header = True
+        for info in miner.mine():
+            csv.append(csv.to_stats(info), stats_file_path, write_header=write_header)
+            write_header = False
+            with open(output_file_path, "a") as f:
+                f.write(str(info))
 
     @staticmethod
     def __create_parser() -> ArgParser:
