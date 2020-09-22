@@ -156,7 +156,7 @@ class Miner:
                 if info.dockerfile is not None:
                     info.dockerfile_source = "v2"
                 else:
-                    deps = self._get_extra_dependencies(projectdir)
+                    deps = self._get_extra_dependencies(projectdir, info.name)
                     if deps is not None:
                         info.dockerfile_source = deps[1]
                         info.dockerfile = deps[0]
@@ -218,10 +218,10 @@ class Miner:
         return None
 
     def _get_extra_dependencies(
-        self, projectdir: Path
+        self, projectdir: Path, package_name: str,
     ) -> Optional[Tuple[Dependencies, str]]:
         self.__logger.debug("Getting extra dependencies")
-        extra = ExtraDependencies(projectdir, self.__logfile)
+        extra = ExtraDependencies(projectdir, package_name, self.__logfile)
         deps, source = extra.get_extra_dependencies()
         if deps:
             df = Dependencies("FROM python:3.8")

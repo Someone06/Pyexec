@@ -9,8 +9,11 @@ from pyexec.util.logging import get_logger
 
 
 class ExtraDependencies:
-    def __init__(self, project_path: Path, logfile: Optional[Path] = None) -> None:
+    def __init__(
+        self, project_path: Path, package_name: str, logfile: Optional[Path] = None
+    ) -> None:
         self._logfile = logfile
+        self._package_name = package_name
         self._logger = get_logger("Pyexec:ExtraDepnendencies", logfile)
         if not project_path.exists() or not project_path.is_dir():
             self._logger.warning(
@@ -27,7 +30,7 @@ class ExtraDependencies:
         pipfile = self._project_path.joinpath("Pipfile")
         if pipfile.exists() and pipfile.is_file():
             inferer: InferExtraDependencies = InferFromPipfile(
-                pipfile, self._project_path.name, self._logfile
+                pipfile, self._package_name, self._logfile
             )
             result = inferer.infer_dependencies()
             if len(result.items()) > 0:

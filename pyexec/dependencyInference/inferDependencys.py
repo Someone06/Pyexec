@@ -92,9 +92,7 @@ class InferDockerfile:
             if df is None:
                 self.__logger.debug("No environment found for file {}".format(f))
                 self.__logger.info(
-                    "No environment found for package {}".format(
-                        self.__project_path.name
-                    )
+                    "No environment found for package {}".format(self.__project_name)
                 )
                 raise InferDockerfile.NoEnvironmentFoundException(
                     "V2 was unable to infer a working environment"
@@ -104,9 +102,7 @@ class InferDockerfile:
                 self.__logger.debug("Inferring for file {} successful".format(f))
 
         self.__logger.info(
-            "Dependency inference successful for package {}".format(
-                self.__project_path.name
-            )
+            "Dependency inference successful for package {}".format(self.__project_name)
         )
         try:
             return Dependencies.merge_dependencies(dependencies)
@@ -178,9 +174,7 @@ class InferDockerfile:
 
         if tout is not None and ret == 124:  # Timeout triggered, see 'man timeout'
             self.__logger.debug("Timed out on file {}".format(file_path))
-            self.__logger.info(
-                "Timed out on project {}".format(self.__project_path.name)
-            )
+            self.__logger.info("Timed out on project {}".format(self.__project_name))
             raise TimeoutException("V2 timed out on file {}".format(file_path.name))
 
         lines = out.splitlines()
