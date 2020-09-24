@@ -16,7 +16,6 @@ class InferFromPipfile(InferExtraDependencies):
         self, file_path: Path, project_name: str, logfile: Optional[Path]
     ) -> None:
         super().__init__(file_path, logfile)
-        print(project_name)
         self._project_name = project_name
         if file_path.name != "Pipfile":
             self._logger.error("File {} is not a Pipfile".format(file_path))
