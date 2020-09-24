@@ -24,7 +24,6 @@ class PyexecStats:
     has_makefile: bool
     has_pipfile: bool
     loc: int
-    num_files: int
     num_impl_files: int
     num_test_files: int
     average_complexity: float
@@ -87,11 +86,6 @@ class CSV:
             -1
             if info.repo_info is None or info.repo_info.loc is None
             else info.repo_info.loc
-        )
-        num_files = (
-            -1
-            if info.repo_info is None or info.repo_info.num_files is None
-            else info.repo_info.num_files
         )
         num_impl_files = (
             -1
@@ -164,7 +158,6 @@ class CSV:
             has_makefile,
             has_pipfile,
             loc,
-            num_files,
             num_impl_files,
             num_test_files,
             average_complexity,
@@ -195,4 +188,4 @@ class CSV:
     def append(self, stat: PyexecStats, csv_file: Path, *, write_header: bool) -> None:
         toCSV = asdict(stat)
         frame = pd.DataFrame([toCSV])
-        frame.to_csv(csv_file, mode="a", header=write_header)
+        frame.to_csv(csv_file, mode="a", header=write_header, index=False)
