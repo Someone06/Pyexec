@@ -4,7 +4,7 @@ Pyexec can be used to mine projects from GitHub, infer enviroments for them and 
 
 [![License LGPL v3](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
-[![Python 3.7](https://img.shields.io/badge/python-3.8-blue.svg)](https://www.python.org)
+[![Python 3.8](https://img.shields.io/badge/python-3.8-blue.svg)](https://www.python.org)
 
 ## Prerequisites
 To run or use Pyexec you need several dependendencys:

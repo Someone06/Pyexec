@@ -29,7 +29,6 @@ class InferFromSetuppy(InferExtraDependencies):
             return dict()
         deps_list = deps_list.replace("\n", " ")
         matches = self._dependency_regex.findall(deps_list)
-        self._logger.debug("Found setup.py matches: {}".format(matches))
         result: Dict[str, Optional[str]] = dict()
         for match in matches:
             name = match[0].strip()
