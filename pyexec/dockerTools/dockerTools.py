@@ -67,5 +67,5 @@ class DockerTools:
         _ = docker["rmi", "-f", self.__image_tag].run(retcode=None)
         _, out, _ = docker["images", "-q", self.__image_tag].run(retcode=None)
         out = out.strip()
-        if not out.startswith("Error"):
+        if out != "" and not out.startswith("Error"):
             docker["rmi", "-f", out].run(retcode=None)
