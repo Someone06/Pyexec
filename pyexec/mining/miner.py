@@ -200,10 +200,11 @@ class Miner:
         docker.write_dockerfile()
         try:
             docker.build_image()
-            docker.remove_image()
             return True
         except BuildFailedException:
             return False
+        finally:
+            docker.remove_image()
 
     def _run_v2(self, projectdir: Path, project_name: str) -> Optional[Dependencies]:
         inferdockerfile = InferDockerfile(projectdir, project_name, self.__logfile)
