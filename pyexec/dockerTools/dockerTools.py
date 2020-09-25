@@ -64,6 +64,7 @@ class DockerTools:
 
     def remove_image(self) -> None:
         self.__logger.debug("Remove docker image")
+        _ = docker["rmi", "-f", self.__image_tag].run(retcode=None)
         _, out, _ = docker["images", "-q", self.__image_tag].run(retcode=None)
         out = out.strip()
         if not out.startswith("Error"):

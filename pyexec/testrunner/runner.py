@@ -8,10 +8,6 @@ from pyexec.util.dependencies import Dependencies
 from pyexec.util.logging import get_logger
 
 
-class BuildFailedException(Exception):
-    pass
-
-
 class RunnerNotUsedException(Exception):
     pass
 
