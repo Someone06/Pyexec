@@ -34,12 +34,10 @@ class DockerTools:
 
     def build_image(self) -> None:
         self.__logger.debug("Building docker image")
-        _, out, err = docker["build", "-t", self.__image_tag, self.__context].run(
-            retcode=None
-        )
+        _ = docker["build", "-t", self.__image_tag, self.__context].run(retcode=None)
         self.__logger.debug("Build")
-        success = out.splitlines()[-1].startswith("Success")
-        if success:
+        _, out, err = docker["images", "-q", self.__image_tag].run(retcode=None)
+        if out != "":
             self.__logger.debug("Successfully build image")
         else:
             self.__logger.debug("Error building image")
