@@ -35,7 +35,7 @@ class AbstractRunner(ABC):
 
         self._project_path = project_path
         self._dependencies = dependencies
-        self._tag = "pyexec/{}".format(self._project_path.name.lower())
+        self._tag = "pyexec:{}".format(self._project_path.name.lower())
         self._logfile = logfile
         self._logger = get_logger("Pyexec:AbstractRunner", logfile)
 

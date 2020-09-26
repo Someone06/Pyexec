@@ -34,7 +34,9 @@ class DockerTools:
 
     def build_image(self) -> None:
         self.__logger.debug("Building docker image")
-        _ = docker["build", "-t", self.__image_tag, self.__context].run(retcode=None)
+        _ = docker["build", "-q", "-t", self.__image_tag, self.__context].run(
+            retcode=None
+        )
         self.__logger.debug("Build")
         _, out, err = docker["images", "-q", self.__image_tag].run(retcode=None)
         if out != "":
@@ -46,7 +48,15 @@ class DockerTools:
     def run_container(self, tout: Optional[int]) -> Tuple[str, str]:
         self.__logger.debug("Running container")
         if tout is not None:
-            run_command = timeout[tout, "docker", "run", "--rm", self.__image_tag]
+            run_command = timeout[
+                tout,
+                "docker",
+                "run",
+                "--name",
+                self.__image_tag + "-container",
+                "--rm",
+                self.__image_tag,
+            ]
         else:
             run_command = docker["run", "--rm", self.__image_tag]
 
@@ -64,6 +74,5 @@ class DockerTools:
         self.__logger.debug("Remove docker image")
         _ = docker["rmi", "-f", self.__image_tag].run(retcode=None)
         _, out, _ = docker["images", "-q", self.__image_tag].run(retcode=None)
-        out = out.strip()
-        if out != "" and not out.startswith("Error"):
+        if out != "":
             docker["rmi", "-f", out].run(retcode=None)

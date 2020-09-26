@@ -194,7 +194,7 @@ class Miner:
     def __test_dockerfile_builds(
         self, dependencies: Dependencies, tmp_dir: Path, project_name: str
     ) -> bool:
-        tag = "pyexec/{}".format(project_name.lower())
+        tag = "pyexec:{}".format(project_name.lower())
         docker = DockerTools(dependencies, tmp_dir, tag, self.__logfile)
         docker.remove_image()
         docker.write_dockerfile()
