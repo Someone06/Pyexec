@@ -194,8 +194,7 @@ class Miner:
     def __test_dockerfile_builds(
         self, dependencies: Dependencies, tmp_dir: Path, project_name: str
     ) -> bool:
-        tag = "pyexec:{}".format(project_name.lower())
-        docker = DockerTools(dependencies, tmp_dir, tag, self.__logfile)
+        docker = DockerTools(dependencies, tmp_dir, project_name, self.__logfile)
         docker.remove_image()
         docker.write_dockerfile()
         try:
@@ -335,7 +334,7 @@ class PyexecMiner:
             csv.append(csv.to_stats(info), stats_file_path, write_header=write_header)
             write_header = False
             with open(output_file_path, "a") as f:
-                f.write(str(info))
+                f.write(str(info) + "\n\n")
 
     @staticmethod
     def __create_parser() -> ArgParser:
