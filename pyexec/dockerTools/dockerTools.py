@@ -24,7 +24,6 @@ class DockerTools:
         self.__dependencies = dependencies
         self.__project_name = project_name.lower()
         self.__tag = "pyexec:" + self.__project_name
-        self.__image_id = ""
         self.__context = context
         if not self.__context.exists() or not self.__context.is_dir():
             raise ValueError("Context is not a directory")
@@ -36,21 +35,16 @@ class DockerTools:
 
     def build_image(self) -> None:
         self.__logger.debug("Building docker image")
-        _, self.__image_id, _ = docker[
-            "build", "-q", "--force-rm", "-t", self.__tag, self.__context
+        _, out, _ = docker[
+            "build", "-q", "--force-rm", "--no-cache", "-t", self.__tag, self.__context
         ].run(retcode=None)
-
-        if self.__image_id != "":
+        if out != "":
             self.__logger.debug("Successfully build image")
         else:
             self.__logger.debug("Error building image")
             raise BuildFailedException("docker build command failed")
 
     def run_container(self, tout: Optional[int]) -> Tuple[str, str]:
-        if self.__image_id == "":
-            self.__logger.error("No image to run container from!")
-            return "", ""
-
         self.__logger.debug("Running container")
         if tout is not None:
             run_command = timeout[
@@ -79,6 +73,4 @@ class DockerTools:
 
     def remove_image(self) -> None:
         self.__logger.debug("Remove docker image")
-        if self.__image_id != "":
-            _ = docker["rmi", "-f", self.__image_id].run(retcode=None)
-            self.__image_id = ""
+        docker["rmi", "-f", self.__tag].run(retcode=None)
