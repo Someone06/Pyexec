@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional, Tuple
 
-from plumbum.cmd import docker, timeout, xargs
+from plumbum.cmd import docker, timeout
 
 from pyexec.util.dependencies import Dependencies
 from pyexec.util.exceptions import TimeoutException
@@ -36,9 +36,10 @@ class DockerTools:
 
     def build_image(self) -> None:
         self.__logger.debug("Building docker image")
-        _ = docker["build", "-q", "-t", self.__tag, self.__context].run(retcode=None)
-        self.__logger.debug("Build")
-        _, self.__image_id, _ = docker["images", "-q", self.__tag].run(retcode=None)
+        _, self.__image_id, _ = docker[
+            "build", "-q", "--force-rm", "-t", self.__tag, self.__context
+        ].run(retcode=None)
+
         if self.__image_id != "":
             self.__logger.debug("Successfully build image")
         else:
@@ -63,15 +64,10 @@ class DockerTools:
             ]
         else:
             run_command = docker[
-                "run", "--rm", "--name", self.__project_name, self.__tag
+                "run", "--name", self.__project_name, "--rm", self.__tag
             ]
 
         ret, out, err = run_command.run(retcode=None)
-        remove_container = (
-            docker["ps", "-a", "-q", "--filter", "ancestor=" + self.__image_id]
-            | xargs["-r", "docker", "rm", "-v"]
-        )
-        _ = remove_container.run(retcode=None)
         if (
             timeout is not None and ret == 124
         ):  # Timeout was triggered, see 'man timeout'
@@ -83,5 +79,6 @@ class DockerTools:
 
     def remove_image(self) -> None:
         self.__logger.debug("Remove docker image")
-        _ = docker["rmi", "-f", self.__tag].run(retcode=None)
-        _ = docker["rmi", "-f", self.__image_id].run(retcode=None)
+        if self.__image_id != "":
+            _ = docker["rmi", "-f", self.__image_id].run(retcode=None)
+            self.__image_id = ""

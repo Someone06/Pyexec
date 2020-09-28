@@ -61,9 +61,9 @@ class AbstractRunner(ABC):
         )
         docker.remove_image()
         docker.write_dockerfile()
+        docker.build_image()
 
         try:
-            docker.build_image()
             return docker.run_container(tout)
         finally:
             docker.remove_image()
