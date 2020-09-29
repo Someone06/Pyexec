@@ -19,6 +19,8 @@ class AbstractRunner(ABC):
         project_name: str,
         dependencies: Dependencies,
         logfile: Optional[Path] = None,
+        *,
+        clear_dangling_images: bool = False
     ) -> None:
         if not tmp_path.exists() or not tmp_path.is_dir():
             raise NotADirectoryError(
@@ -38,6 +40,7 @@ class AbstractRunner(ABC):
         self._project_name = project_name
         self._logfile = logfile
         self._logger = get_logger("Pyexec:AbstractRunner", logfile)
+        self.__clear_dangling_images = clear_dangling_images
 
     @abstractmethod
     def run(self) -> Tuple[TestResult, CoverageResult]:
@@ -58,6 +61,7 @@ class AbstractRunner(ABC):
             self._project_path.parent,
             self._project_name,
             self._logfile,
+            clear_dangling_images=self.__clear_dangling_images,
         )
         docker.remove_image()
         docker.write_dockerfile()

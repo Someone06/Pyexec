@@ -42,8 +42,16 @@ class PytestRunner(AbstractRunner):
         project_name: str,
         dependencies: Dependencies,
         logfile: Optional[Path] = None,
+        *,
+        clear_dangling_images: bool = False
     ) -> None:
-        super().__init__(tmp_path, project_name, dependencies, logfile)
+        super().__init__(
+            tmp_path,
+            project_name,
+            dependencies,
+            logfile,
+            clear_dangling_images=clear_dangling_images,
+        )
 
     def run(self, timeout: Optional[int] = None) -> Tuple[TestResult, CoverageResult]:
         if not self.is_used_in_project():

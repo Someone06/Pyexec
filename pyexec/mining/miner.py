@@ -32,11 +32,14 @@ class Miner:
         packages: List[str],
         github_token: Optional[str],
         logfile: Optional[Path] = None,
+        *,
+        clear_dangling_images: bool = False,
     ):
         self.__packages = packages
         self.__github_token = github_token
         self.__logfile = logfile
         self.__logger = get_logger("Pyexec::Miner", logfile)
+        self.__clear_dangling_images = clear_dangling_images
         self.__github_regex = re.compile(
             r"(http[s]?://)?(www.)?github.com/([^/]*)/(.*)", re.IGNORECASE
         )
@@ -165,7 +168,11 @@ class Miner:
                     return
                 self.__logger.debug("Found dependencies")
                 runner: AbstractRunner = PytestRunner(
-                    tmpdir, projectdir.name, info.dockerfile, self.__logfile
+                    tmpdir,
+                    projectdir.name,
+                    info.dockerfile,
+                    self.__logfile,
+                    clear_dangling_images=self.__clear_dangling_images,
                 )
                 if runner.is_used_in_project():
                     try:
@@ -194,7 +201,13 @@ class Miner:
     def __test_dockerfile_builds(
         self, dependencies: Dependencies, tmp_dir: Path, project_name: str
     ) -> bool:
-        docker = DockerTools(dependencies, tmp_dir, project_name, self.__logfile)
+        docker = DockerTools(
+            dependencies,
+            tmp_dir,
+            project_name,
+            self.__logfile,
+            clear_dangling_images=self.__clear_dangling_images,
+        )
         docker.remove_image()
         docker.write_dockerfile()
         try:
@@ -273,6 +286,7 @@ class PyexecMiner:
 
         self.__config = self.__parser.parse_args(argv[1:])
         self.__github_token: Optional[str] = self.__config.github_token
+        self.__clear_dangling_images = self.__config.clear_dangling_images
 
         if self.__config.package_list is not None:
             self.__package_list = self.__packages_from_file(
@@ -322,7 +336,10 @@ class PyexecMiner:
     def mine(self) -> None:
         output_dir = self.__create_output_dir()
         miner = Miner(
-            self.__package_list, self.__github_token, output_dir.joinpath("log.txt")
+            self.__package_list,
+            self.__github_token,
+            output_dir.joinpath("log.txt"),
+            clear_dangling_images=self.__clear_dangling_images,
         )
 
         stats_file_path = output_dir.joinpath("stats.csv")
@@ -354,6 +371,12 @@ class PyexecMiner:
             "--github-token",
             dest="github_token",
             help="A GitHub token for mining data from GitHub",
+        )
+        parser.add_argument(
+            "--clear-dangling-images",
+            action="store_true",
+            dest="clear_dangling_images",
+            help="This can affect other programs! Repeadatly clears all dangling images (not just the ones created by pyexec) to save disk space",
         )
         return parser
 

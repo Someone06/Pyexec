@@ -19,12 +19,15 @@ class DockerTools:
         context: Path,
         project_name: str,
         logfile: Optional[Path] = None,
+        *,
+        clear_dangling_images: bool = False
     ) -> None:
         self.__logger = get_logger("Pyexec::DockerTools", logfile)
         self.__dependencies = dependencies
         self.__project_name = project_name.lower()
         self.__tag = "pyexec:" + self.__project_name
         self.__context = context
+        self.__clear_dangling_images = clear_dangling_images
         if not self.__context.exists() or not self.__context.is_dir():
             raise ValueError("Context is not a directory")
 
@@ -42,6 +45,8 @@ class DockerTools:
             self.__logger.debug("Successfully build image")
         else:
             self.__logger.debug("Error building image")
+            if self.__clear_dangling_images:
+                docker["image", "prune", "-f"].run(retcode=None)
             raise BuildFailedException("docker build command failed")
 
     def run_container(self, tout: Optional[int]) -> Tuple[str, str]:
