@@ -26,6 +26,7 @@ matplotlib = "*"
 numpy = "*"
 seaborn = "*"
 nbconvert = "*"
+statsmodels = "*"
 
 [requires]
 python_version = "3.8"
