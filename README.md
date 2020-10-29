@@ -8,12 +8,12 @@ Pyexec can be used to mine projects from GitHub, infer environments for them and
 
 ## Prerequisites
 Pyexec has several dependencies:
-    * Command line tools: cloc, wget, sed, tr, wc and several other basic command-line programs
-    * Docker and docker-compose
-    * redis-server
-    * nodejs
-    * A fork of V2 (https://github.com/v2-project/v2)
-    * python 3.8 and pipenv (https://github.com/pypa/pipenv)
+* Command line tools: cloc, wget, sed, tr, wc and several other basic command-line programs
+* Docker and docker-compose
+* redis-server
+* nodejs
+* A fork of V2 (https://github.com/v2-project/v2)
+* python 3.8 and pipenv (https://github.com/pypa/pipenv)
 Further dependencies are automatically managed through pipenv.
 
 ## Installation
