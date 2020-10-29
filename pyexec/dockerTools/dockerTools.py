@@ -38,9 +38,11 @@ class DockerTools:
 
     def build_image(self) -> None:
         self.__logger.debug("Building docker image")
-        _, out, _ = docker[
+        _, out, err = docker[
             "build", "-q", "--force-rm", "--no-cache", "-t", self.__tag, self.__context
         ].run(retcode=None)
+        self.__logger.debug(out)
+        self.__logger.debug(err)
         if out != "":
             self.__logger.debug("Successfully build image")
         else:
@@ -67,6 +69,8 @@ class DockerTools:
             ]
 
         ret, out, err = run_command.run(retcode=None)
+        self.__logger.debug(out)
+        self.__logger.debug(err)
         if (
             timeout is not None and ret == 124
         ):  # Timeout was triggered, see 'man timeout'
