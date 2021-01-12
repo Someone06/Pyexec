@@ -56,6 +56,10 @@ If a mined git repository does not contain any Python files then attempting to c
 
 If two instances of Pyexec attempt to mine the same project at the same time this will cause errors.
 
+## Evaluation
+The data obtained from Pyexec has been inspected using Jupiter Notebooks.
+These Notebooks are included in the repository as well.
+
 ## License
 This file is part of Pyexec.
 
